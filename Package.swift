@@ -3,12 +3,12 @@ import PackageDescription
 
 
 let package = Package(
-	name: "COpenLDAP",
+	name: "COpenSSL",
 	platforms: [
 		.macOS(.v11) /* Technically .v12 */
 	],
 	products: [
-		.executable(name: "build-openldap", targets: ["build-openldap"])
+		.executable(name: "build-openssl", targets: ["build-openssl"])
 	],
 	dependencies: [
 		.package(url: "https://github.com/apple/swift-argument-parser.git", .branch("async")),
@@ -18,7 +18,7 @@ let package = Package(
 		.package(url: "https://github.com/xcode-actions/XcodeTools.git", from: "0.3.5")
 	],
 	targets: [
-		.executableTarget(name: "build-openldap", dependencies: [
+		.executableTarget(name: "build-openssl", dependencies: [
 			.product(name: "ArgumentParser", package: "swift-argument-parser"),
 			.product(name: "CLTLogger",      package: "clt-logger"),
 			.product(name: "SystemPackage",  package: "swift-system"),

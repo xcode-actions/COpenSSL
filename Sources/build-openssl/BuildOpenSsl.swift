@@ -12,18 +12,18 @@ import XibLoc
 
 @main
 @available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
-struct BuildOpenLdap : ParsableCommand {
+struct BuildOpenSsl : ParsableCommand {
 	
-	@Option(help: "Everything build-openldap will do will be in this folder. The folder will be created if it does not exist.")
-	var workdir = "./openldap-workdir"
+	@Option(help: "Everything build-openssl will do will be in this folder. The folder will be created if it does not exist.")
+	var workdir = "./openssl-workdir"
 	
-	@Option(help: "The base URL from which to download LDAP. Everything between double curly braces “{{}}” will be replaced by the LDAP version to build.")
-	var ldapBaseURL = "https://www.openldap.org/software/download/OpenLDAP/openldap-release/openldap-{{ version }}.tgz"
+	@Option(help: "The base URL from which to download OpenSSL. Everything between double curly braces “{{}}” will be replaced by the OpenSSL version to build.")
+	var opensslBaseURL = "https://www.openssl.org/source/openssl-{{ version }}.tar.gz"
 	
 	@Option
-	var ldapVersion = "2.5.5"
+	var opensslVersion = "1.1.1k"
 	
-	/* For 2.5.5, value is 74ecefda2afc0e054d2c7dc29166be6587fa9de7a4087a80183bc9c719dbf6b3 */
+	/* For 1.1.1k, value is 892a0875b9872acd04a9fde79b1f943075d5ea162415de3047c327df33fbaee5 */
 	@Option(help: "The shasum-256 expected for the tarball. If not set, the integrity of the archive will not be verified.")
 	var expectedTarballShasum: String?
 	
@@ -62,7 +62,7 @@ struct BuildOpenLdap : ParsableCommand {
 	func run() async throws {
 		LoggingSystem.bootstrap{ _ in CLTLogger() }
 		let logger = { () -> Logger in
-			var ret = Logger(label: "me.frizlab.build-openldap")
+			var ret = Logger(label: "me.frizlab.build-openssl")
 			ret.logLevel = .debug
 			return ret
 		}()
@@ -81,7 +81,7 @@ struct BuildOpenLdap : ParsableCommand {
 		
 		fm.changeCurrentDirectoryPath(workdir)
 		
-		let tarballStringURL = ldapBaseURL.applying(xibLocInfo: Str2StrXibLocInfo(simpleSourceTypeReplacements: [OneWordTokens(leftToken: "{{", rightToken: "}}"): { _ in ldapVersion }], identityReplacement: { $0 })!)
+		let tarballStringURL = opensslBaseURL.applying(xibLocInfo: Str2StrXibLocInfo(simpleSourceTypeReplacements: [OneWordTokens(leftToken: "{{", rightToken: "}}"): { _ in opensslVersion }], identityReplacement: { $0 })!)
 		logger.debug("Tarball URL as string: \(tarballStringURL)")
 		
 		guard let tarballURL = URL(string: tarballStringURL) else {
@@ -142,7 +142,7 @@ struct BuildOpenLdap : ParsableCommand {
 		return SHA256.hash(data: fileContents).reduce("", { $0 + String(format: "%02x", $1) }) == expectedChecksum.lowercased()
 	}
 	
-	private func buildLDAP(sourceTarball: URL, platform: String, sdkVersion: String, arch: String) throws {
+	private func buildOpenSSL(sourceTarball: URL, platform: String, sdkVersion: String, arch: String) throws {
 		
 	}
 	
