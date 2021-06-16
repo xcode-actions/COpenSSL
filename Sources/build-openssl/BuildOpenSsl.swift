@@ -29,19 +29,29 @@ struct BuildOpenSsl : ParsableCommand {
 	
 	@Option
 	var targets = [
-		Target("macOS" "macOS"),
-				(sdk: "iOS", platform: "iOS"),
-				(sdk: "iOS", platform: "iOS Simulator"),
-				(sdk: "iOS", platform: "macOS"),
-				(sdk: "tvOS", platform: "tvOS"),
-				(sdk: "tvOS", platform: "tvOS Simulator"),
-				(sdk: "watchOS", platform: "watchOS"),
-				(sdk: "watchOS", platform: "watchOS Simulator
-		"macos64-x86_64", "macos64-arm64",
-		"ios-sim-cross-x86_64", "ios-sim-cross-arm64", "ios64-cross-arm64", "ios64-cross-arm64e",
-		"mac-catalyst-x86_64", "mac-catalyst-arm64",
-		"watchos-cross-armv7k", "watchos-cross-arm64_32", "watchos-sim-cross-x86_64", "watchos-sim-cross-i386", "watchos-sim-cross-arm64",
-		"tvos-sim-cross-x86_64", "tvos64-cross-arm64"
+		Target(sdk: "macOS", platform: "macOS", arch: "arm64"),
+		Target(sdk: "macOS", platform: "macOS", arch: "x86_64"),
+		
+		Target(sdk: "iOS", platform: "iOS", arch: "arm64"),
+		Target(sdk: "iOS", platform: "iOS", arch: "arm64e"),
+		
+		Target(sdk: "iOS", platform: "iOS_Simulator", arch: "arm64"),
+		Target(sdk: "iOS", platform: "iOS_Simulator", arch: "x86_64"),
+		
+		Target(sdk: "iOS", platform: "macOS", arch: "arm64"),
+		Target(sdk: "iOS", platform: "macOS", arch: "x86_64"),
+		
+		Target(sdk: "tvOS", platform: "tvOS", arch: "arm64"),
+		
+//		Target(sdk: "tvOS", platform: "tvOS_Simulator", arch: "arm64"), /* Was not in original build repo, but why not add it one of these days if it exists */
+		Target(sdk: "tvOS", platform: "tvOS_Simulator", arch: "x86_64"),
+		
+		Target(sdk: "watchOS", platform: "watchOS", arch: "armv7k"),
+		Target(sdk: "watchOS", platform: "watchOS", arch: "arm64_32"),
+		
+		Target(sdk: "watchOS", platform: "watchOS_Simulator", arch: "arm64"),
+		Target(sdk: "watchOS", platform: "watchOS_Simulator", arch: "x86_64"),
+		Target(sdk: "watchOS", platform: "watchOS_Simulator", arch: "i386")
 	]
 	
 	@Option(name: .customLong("macos-min-sdk-version"))
