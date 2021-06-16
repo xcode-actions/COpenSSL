@@ -115,7 +115,7 @@ struct BuildOpenSsl : ParsableCommand {
 				struct InvalidChecksumForDownloadedTarball : Error {}
 				throw InvalidChecksumForDownloadedTarball()
 			}
-			try fm.removeItem(at: localTarballURL)
+			_ = try? fm.removeItem(at: localTarballURL)
 			try fm.moveItem(at: tmpFileURL, to: localTarballURL)
 			logger.info("Tarball downloaded")
 		}
