@@ -27,6 +27,9 @@ struct BuildOpenSsl : ParsableCommand {
 	@Option(help: "The shasum-256 expected for the tarball. If not set, the integrity of the archive will not be verified.")
 	var expectedTarballShasum: String?
 	
+	@Flag
+	var clean = false
+	
 	@Option
 	var targets = [
 		Target(sdk: "macOS", platform: "macOS", arch: "arm64"),
@@ -71,23 +74,31 @@ struct BuildOpenSsl : ParsableCommand {
 	
 	func run() async throws {
 		LoggingSystem.bootstrap{ _ in CLTLogger() }
+		XcodeTools.XcodeToolsConfig.logger?.logLevel = .warning
 		let logger = { () -> Logger in
 			var ret = Logger(label: "me.frizlab.build-openssl")
 			ret.logLevel = .debug
 			return ret
 		}()
 		
+		let developerDir = try Process.spawnAndGetOutput("/usr/bin/xcode-select", args: ["-print-path"])
+			.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+		logger.debug("Using Developer dir \(developerDir)")
+		
 		let fm = FileManager.default
 		
-		var isDir = ObjCBool(false)
-		if !fm.fileExists(atPath: workdir, isDirectory: &isDir) {
-			try fm.createDirectory(at: URL(fileURLWithPath: workdir), withIntermediateDirectories: true, attributes: nil)
-		} else {
-			guard isDir.boolValue else {
-				struct WorkDirIsNotDir : Error {}
-				throw WorkDirIsNotDir()
-			}
+		let sourcesDirectory = URL(fileURLWithPath: workdir).appendingPathComponent("sources").path
+		let installsDirectory = URL(fileURLWithPath: workdir).appendingPathComponent("raw-products").path
+		
+		if clean {
+			logger.info("Cleaning previous builds if applicable")
+			try ensureDirectoryDeleted(path: sourcesDirectory, fileManager: fm)
+			try ensureDirectoryDeleted(path: installsDirectory, fileManager: fm)
 		}
+		
+		try ensureDirectory(path: workdir, fileManager: fm)
+		try ensureDirectory(path: sourcesDirectory, fileManager: fm)
+		try ensureDirectory(path: installsDirectory, fileManager: fm)
 		
 		fm.changeCurrentDirectoryPath(workdir)
 		
@@ -120,27 +131,68 @@ struct BuildOpenSsl : ParsableCommand {
 			logger.info("Tarball downloaded")
 		}
 		
-//		let args = [
-//			"--prefix=\(scriptDir)/build/version_TODO",
-//			"--enable-accesslog",
-//			"--enable-auditlog",
-//			"--enable-constraint",
-//			"--enable-dds",
-//			"--enable-deref",
-//			"--enable-dyngroup",
-//			"--enable-dynlist",
-//			"--enable-memberof",
-//			"--enable-ppolicy",
-//			"--enable-proxycache",
-//			"--enable-refint",
-//			"--enable-retcode",
-//			"--enable-seqmod",
-//			"--enable-translucent",
-//			"--enable-unique",
-//			"--enable-valsort"
-//		]
-//		try Process.spawnAndStream("./configure", args: args, outputHandler: { _,_ in })
-//		try Process.spawnAndStream("/usr/bin/make", args: ["install"], outputHandler: { _,_ in })
+		for target in targets {
+			let sourceDirectoryURL = URL(fileURLWithPath: sourcesDirectory).appendingPathComponent("\(target)")
+			let installDirectoryURL = URL(fileURLWithPath: installsDirectory).appendingPathComponent("\(target)")
+			let extractedSourceDirectoryURL = sourceDirectoryURL.appendingPathComponent(localTarballURL.deletingPathExtension().deletingPathExtension().lastPathComponent)
+			try ensureDirectory(path: sourceDirectoryURL.path, fileManager: fm)
+			try ensureDirectory(path: installDirectoryURL.path, fileManager: fm)
+			
+			/* Extract tarball in source directory. If the tarball was already
+			 * there, tar will overwrite existing files. */
+			try Process.spawnAndStreamEnsuringSuccess("/usr/bin/tar", args: ["xf", localTarballURL.path, "-C", sourceDirectoryURL.path])
+			
+			var isDir = ObjCBool(false)
+			guard fm.fileExists(atPath: extractedSourceDirectoryURL.path, isDirectory: &isDir), isDir.boolValue else {
+				struct ExtractedTarballNotFound : Error {var expectedPath: String}
+				throw ExtractedTarballNotFound(expectedPath: extractedSourceDirectoryURL.path)
+			}
+			
+			logger.info("Building for target \(target)")
+			try buildAndInstallOpenSSL(
+				sourceDirectory: extractedSourceDirectoryURL, installDirectory: installDirectoryURL,
+				target: target, devDir: developerDir, fileManager: fm
+			)
+		}
+	}
+	
+	var numberOfCores: Int? = {
+		guard MemoryLayout<Int32>.size <= MemoryLayout<Int>.size else {
+//			logger.notice("Int32 is bigger than Int (\(MemoryLayout<Int32>.size) > \(MemoryLayout<Int>.size)). Cannot return the number of cores.")
+			return nil
+		}
+		
+		var ncpu: Int32 = 0
+		var len = MemoryLayout.size(ofValue: ncpu)
+		
+		var mib = [CTL_HW, HW_NCPU]
+		let namelen = u_int(mib.count)
+		
+		guard sysctl(&mib, namelen, &ncpu, &len, nil, 0) == 0 else {return nil}
+		return Int(ncpu)
+	}()
+	
+	private func ensureDirectory(path: String, fileManager fm: FileManager) throws {
+		var isDir = ObjCBool(false)
+		if !fm.fileExists(atPath: path, isDirectory: &isDir) {
+			try fm.createDirectory(at: URL(fileURLWithPath: path), withIntermediateDirectories: true, attributes: nil)
+		} else {
+			guard isDir.boolValue else {
+				struct ExpectedDir : Error {var path: String}
+				throw ExpectedDir(path: path)
+			}
+		}
+	}
+	
+	private func ensureDirectoryDeleted(path: String, fileManager fm: FileManager) throws {
+		var isDir = ObjCBool(false)
+		if fm.fileExists(atPath: path, isDirectory: &isDir) {
+			guard isDir.boolValue else {
+				struct ExpectedDir : Error {var path: String}
+				throw ExpectedDir(path: path)
+			}
+			try fm.removeItem(at: URL(fileURLWithPath: path))
+		}
 	}
 	
 	private func checkChecksum(file: URL, expectedChecksum: String?) throws -> Bool {
@@ -152,8 +204,31 @@ struct BuildOpenSsl : ParsableCommand {
 		return SHA256.hash(data: fileContents).reduce("", { $0 + String(format: "%02x", $1) }) == expectedChecksum.lowercased()
 	}
 	
-	private func buildOpenSSL(sourceTarball: URL, platform: String, sdkVersion: String, arch: String) throws {
+	private func buildAndInstallOpenSSL(sourceDirectory: URL, installDirectory: URL, target: Target, devDir: String, fileManager fm: FileManager) throws {
+		/* Apparently we *have to* change the CWD */
+		fm.changeCurrentDirectoryPath(sourceDirectory.path)
 		
+		/* Prepare -j option for make */
+		let multicoreMakeOption = numberOfCores.flatMap{ ["-j", "\($0)"] } ?? []
+		
+		/* *** Configure *** */
+		setenv("CROSS_COMPILE",              "\(devDir)/Toolchains/XcodeDefault.xctoolchain/usr/bin/", 1)
+		setenv("OPENSSLBUILD_SDKs_LOCATION", "\(devDir)/Platforms/\(target.platformLegacyName).platform/Developer", 1)
+		setenv("OPENSSLBUILD_SDK",           "\(target.platformLegacyName).sdk", 1) // TODO: SDK version overrides
+		setenv("OPENSSL_LOCAL_CONFIG_DIR",   "/Users/frizlab/Documents/Private/COpenSSL/Files/OpenSSLConfigs", 1)
+		let configArgs = [
+			"\(target)",
+			"--prefix=\(installDirectory.path)",
+			"no-async",
+			"no-shared"
+		] + (target.arch.hasSuffix("64") ? ["enable-ec_nistp_64_gcc_128"] : [])
+		try Process.spawnAndStreamEnsuringSuccess(sourceDirectory.appendingPathComponent("Configure").path, args: configArgs)
+		
+		/* *** Build *** */
+		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/make", args: multicoreMakeOption)
+		
+		/* *** Install *** */
+		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/make", args: ["install_sw"] + multicoreMakeOption)
 	}
 	
 }

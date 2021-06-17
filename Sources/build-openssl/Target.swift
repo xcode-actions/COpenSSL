@@ -35,4 +35,17 @@ struct Target : ExpressibleByArgument, CustomStringConvertible {
 		return openSSLConfigName
 	}
 	
+	var platformLegacyName: String {
+		switch platform {
+			case "macOS":             return "MacOSX"
+			case "iOS":               return "iPhoneOS"
+			case "iOS_Simulator":     return "iPhoneSimulator"
+			case "tvOS":              return "AppleTVOS"
+			case "tvOS_Simulator":    return "AppleTVSimulator"
+			case "watchOS":           return "WatchOS"
+			case "watchOS_Simulator": return "WatchSimulator"
+			default: return platform.replacingOccurrences(of: "_", with: " ")
+		}
+	}
+	
 }
