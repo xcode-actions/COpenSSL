@@ -140,7 +140,7 @@ struct BuildFramework : ParsableCommand {
 			
 			/* Extract tarball in source directory. If the tarball was already
 			 * there, tar will overwrite existing files. */
-			try Process.spawnAndStreamEnsuringSuccess("/usr/bin/tar", args: ["xf", localTarballURL.path, "-C", sourceDirectoryURL.path])
+			try Process.spawnAndStreamEnsuringSuccess("/usr/bin/tar", args: ["xf", localTarballURL.path, "-C", sourceDirectoryURL.path], outputHandler: Process.logProcessOutputFactory(logger: logger))
 			
 			var isDir = ObjCBool(false)
 			guard fm.fileExists(atPath: extractedSourceDirectoryURL.path, isDirectory: &isDir), isDir.boolValue else {
@@ -151,7 +151,7 @@ struct BuildFramework : ParsableCommand {
 			logger.info("Building for target \(target)")
 			try buildAndInstallOpenSSL(
 				sourceDirectory: extractedSourceDirectoryURL, installDirectory: installDirectoryURL,
-				target: target, devDir: developerDir, fileManager: fm
+				target: target, devDir: developerDir, fileManager: fm, logger: logger
 			)
 		}
 	}
@@ -204,7 +204,7 @@ struct BuildFramework : ParsableCommand {
 		return SHA256.hash(data: fileContents).reduce("", { $0 + String(format: "%02x", $1) }) == expectedChecksum.lowercased()
 	}
 	
-	private func buildAndInstallOpenSSL(sourceDirectory: URL, installDirectory: URL, target: Target, devDir: String, fileManager fm: FileManager) throws {
+	private func buildAndInstallOpenSSL(sourceDirectory: URL, installDirectory: URL, target: Target, devDir: String, fileManager fm: FileManager, logger: Logger) throws {
 		/* Apparently we *have to* change the CWD */
 		fm.changeCurrentDirectoryPath(sourceDirectory.path)
 		
@@ -223,13 +223,13 @@ struct BuildFramework : ParsableCommand {
 			"no-shared",
 			"no-tests"
 		] + (target.arch.hasSuffix("64") ? ["enable-ec_nistp_64_gcc_128"] : [])
-		try Process.spawnAndStreamEnsuringSuccess(sourceDirectory.appendingPathComponent("Configure").path, args: configArgs)
+		try Process.spawnAndStreamEnsuringSuccess(sourceDirectory.appendingPathComponent("Configure").path, args: configArgs, outputHandler: Process.logProcessOutputFactory(logger: logger))
 		
 		/* *** Build *** */
-		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/make", args: multicoreMakeOption)
+		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/make", args: multicoreMakeOption, outputHandler: Process.logProcessOutputFactory(logger: logger))
 		
 		/* *** Install *** */
-		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/make", args: ["install_sw"] + multicoreMakeOption)
+		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/make", args: ["install_sw"] + multicoreMakeOption, outputHandler: Process.logProcessOutputFactory(logger: logger))
 	}
 	
 }

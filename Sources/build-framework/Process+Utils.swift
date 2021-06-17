@@ -1,5 +1,6 @@
 import Foundation
 
+import Logging
 import SignalHandling
 import SystemPackage
 import XcodeTools
@@ -8,15 +9,26 @@ import XcodeTools
 
 extension Process {
 	
+	public static func logProcessOutputFactory(logger: Logger) -> (String, FileDescriptor) -> Void {
+		return { line, fd in
+			let trimmedLine = line.trimmingCharacters(in: .newlines)
+			switch fd {
+				case .standardOutput: logger.trace("stdout: \(trimmedLine)")
+				case .standardError:  logger.trace("stderr: \(trimmedLine)")
+				default:              logger.trace("unknown fd: \(trimmedLine)")
+			}
+		}
+	}
+	
 	public static func spawnAndStreamEnsuringSuccess(
 		_ executable: String, args: [String] = [],
 		stdin: FileDescriptor? = FileDescriptor.standardInput,
-		stdoutRedirect: RedirectMode = RedirectMode.none,
-		stderrRedirect: RedirectMode = RedirectMode.none,
+		stdoutRedirect: RedirectMode = RedirectMode.capture,
+		stderrRedirect: RedirectMode = RedirectMode.capture,
 		fileDescriptorsToSend: [FileDescriptor /* Value in parent */: FileDescriptor /* Value in child */] = [:],
 		additionalOutputFileDescriptors: Set<FileDescriptor> = [],
 		signalsToForward: Set<Signal> = Signal.toForwardToSubprocesses,
-		outputHandler: @escaping (_ line: String, _ sourceFd: FileDescriptor) -> Void = { _,_ in }
+		outputHandler: @escaping (_ line: String, _ sourceFd: FileDescriptor) -> Void
 	) throws {
 		let (terminationStatus, terminationReason) = try spawnAndStream(
 			executable, args: args,
