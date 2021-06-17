@@ -30,6 +30,9 @@ struct BuildFramework : ParsableCommand {
 	@Flag
 	var clean = false
 	
+	@Flag
+	var skipExistingArtifacts = false
+	
 	@Option
 	var targets = [
 		Target(sdk: "macOS", platform: "macOS", arch: "arm64"),
@@ -135,11 +138,15 @@ struct BuildFramework : ParsableCommand {
 			let sourceDirectoryURL = URL(fileURLWithPath: sourcesDirectory).appendingPathComponent("\(target)")
 			let installDirectoryURL = URL(fileURLWithPath: installsDirectory).appendingPathComponent("\(target)")
 			let extractedSourceDirectoryURL = sourceDirectoryURL.appendingPathComponent(localTarballURL.deletingPathExtension().deletingPathExtension().lastPathComponent)
-			try ensureDirectory(path: sourceDirectoryURL.path, fileManager: fm)
-			try ensureDirectory(path: installDirectoryURL.path, fileManager: fm)
+			
+			guard !skipExistingArtifacts || !fm.fileExists(atPath: installDirectoryURL.path) else {
+				logger.info("Skipping building of target \(target) because \(installDirectoryURL.path) exists")
+				continue
+			}
 			
 			/* Extract tarball in source directory. If the tarball was already
 			 * there, tar will overwrite existing files. */
+			try ensureDirectory(path: sourceDirectoryURL.path, fileManager: fm)
 			try Process.spawnAndStreamEnsuringSuccess("/usr/bin/tar", args: ["xf", localTarballURL.path, "-C", sourceDirectoryURL.path], outputHandler: Process.logProcessOutputFactory(logger: logger))
 			
 			var isDir = ObjCBool(false)
