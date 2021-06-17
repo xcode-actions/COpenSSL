@@ -67,7 +67,7 @@ struct BuildFramework : ParsableCommand {
 	var iOSMinSDKVersion = "12.0"
 	
 	@Option
-	var catalystMinSDKVersion="10.15"
+	var catalystMinSDKVersion="13.0"
 	
 	@Option(name: .customLong("watchos-min-sdk-version"))
 	var watchOSMinSDKVersion="4.0"
@@ -134,6 +134,8 @@ struct BuildFramework : ParsableCommand {
 			logger.info("Tarball downloaded")
 		}
 		
+		/* Build all the variants we need. Note only static libs are built because
+		 * we merge them later in a single dyn lib to create a single framework. */
 		for target in targets {
 			let sourceDirectoryURL = URL(fileURLWithPath: sourcesDirectory).appendingPathComponent("\(target)")
 			let installDirectoryURL = URL(fileURLWithPath: installsDirectory).appendingPathComponent("\(target)")
