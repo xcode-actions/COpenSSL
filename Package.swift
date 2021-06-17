@@ -8,7 +8,7 @@ let package = Package(
 		.macOS(.v11) /* Technically .v12 */
 	],
 	products: [
-		.executable(name: "build-openssl", targets: ["build-openssl"])
+		.executable(name: "build-openssl-framework", targets: ["build-framework"])
 	],
 	dependencies: [
 		.package(url: "https://github.com/apple/swift-argument-parser.git", .branch("async")),
@@ -19,7 +19,7 @@ let package = Package(
 		.package(url: "https://github.com/xcode-actions/XcodeTools.git", from: "0.3.5")
 	],
 	targets: [
-		.executableTarget(name: "build-openssl", dependencies: [
+		.executableTarget(name: "build-framework", dependencies: [
 			.product(name: "ArgumentParser", package: "swift-argument-parser"),
 			.product(name: "CLTLogger",      package: "clt-logger"),
 			.product(name: "SignalHandling", package: "swift-signal-handling"),

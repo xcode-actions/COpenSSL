@@ -12,9 +12,9 @@ import XibLoc
 
 @main
 @available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
-struct BuildOpenSsl : ParsableCommand {
+struct BuildFramework : ParsableCommand {
 	
-	@Option(help: "Everything build-openssl will do will be in this folder. The folder will be created if it does not exist.")
+	@Option(help: "Everything build-framework will create will be in this folder. The folder will be created if it does not exist.")
 	var workdir = "./openssl-workdir"
 	
 	@Option(help: "The base URL from which to download OpenSSL. Everything between double curly braces “{{}}” will be replaced by the OpenSSL version to build.")
