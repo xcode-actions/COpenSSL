@@ -220,7 +220,8 @@ struct BuildOpenSsl : ParsableCommand {
 			"\(target)",
 			"--prefix=\(installDirectory.path)",
 			"no-async",
-			"no-shared"
+			"no-shared",
+			"no-tests"
 		] + (target.arch.hasSuffix("64") ? ["enable-ec_nistp_64_gcc_128"] : [])
 		try Process.spawnAndStreamEnsuringSuccess(sourceDirectory.appendingPathComponent("Configure").path, args: configArgs)
 		
