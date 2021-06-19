@@ -90,18 +90,37 @@ struct BuildFramework : ParsableCommand {
 		
 		let fm = FileManager.default
 		
-		let sourcesDirectory = URL(fileURLWithPath: workdir).appendingPathComponent("sources").path
-		let installsDirectory = URL(fileURLWithPath: workdir).appendingPathComponent("raw-products").path
+		/* Contains the extracted tarball, config’d and built. One dir per target. */
+		let sourcesDirectory = URL(fileURLWithPath: workdir).appendingPathComponent("step1_sources-and-builds").path
+		/* The builds from the previous step are installed here. */
+		let installsDirectory = URL(fileURLWithPath: workdir).appendingPathComponent("step2_installs").path
+		/* OpenSSL has two libs we merged into one: COpenSSL. One dir per target. */
+		let mergedStaticDirectory = URL(fileURLWithPath: workdir).appendingPathComponent("step3_merged-libs").appendingPathComponent("static").path
+		let mergedDynamicDirectory = URL(fileURLWithPath: workdir).appendingPathComponent("step3_merged-libs").appendingPathComponent("dynamic").path
+		/* Contains the fat libs, built from prev step. One dir per platform+sdk.
+		 * We have to do this because xcodebuild does not do it automatically when
+		 * building an xcframework (this is understandable), and an xcframework
+		 * splits the underlying framework on platform+sdk, not platform+sdk+arch. */
+		let mergedFatStaticDirectory = URL(fileURLWithPath: workdir).appendingPathComponent("step4_merged-fat-libs").appendingPathComponent("static").path
+		let mergedFatDynamicDirectory = URL(fileURLWithPath: workdir).appendingPathComponent("step4_merged-fat-libs").appendingPathComponent("dynamic").path
 		
 		if clean {
 			logger.info("Cleaning previous builds if applicable")
 			try ensureDirectoryDeleted(path: sourcesDirectory, fileManager: fm)
 			try ensureDirectoryDeleted(path: installsDirectory, fileManager: fm)
+			try ensureDirectoryDeleted(path: mergedStaticDirectory, fileManager: fm)
+			try ensureDirectoryDeleted(path: mergedDynamicDirectory, fileManager: fm)
+			try ensureDirectoryDeleted(path: mergedFatStaticDirectory, fileManager: fm)
+			try ensureDirectoryDeleted(path: mergedFatDynamicDirectory, fileManager: fm)
 		}
 		
 		try ensureDirectory(path: workdir, fileManager: fm)
 		try ensureDirectory(path: sourcesDirectory, fileManager: fm)
 		try ensureDirectory(path: installsDirectory, fileManager: fm)
+		try ensureDirectory(path: mergedStaticDirectory, fileManager: fm)
+		try ensureDirectory(path: mergedDynamicDirectory, fileManager: fm)
+		try ensureDirectory(path: mergedFatStaticDirectory, fileManager: fm)
+		try ensureDirectory(path: mergedFatDynamicDirectory, fileManager: fm)
 		
 		fm.changeCurrentDirectoryPath(workdir)
 		
@@ -162,6 +181,16 @@ struct BuildFramework : ParsableCommand {
 				sourceDirectory: extractedSourceDirectoryURL, installDirectory: installDirectoryURL,
 				target: target, devDir: developerDir, fileManager: fm, logger: logger
 			)
+		}
+		
+		/* Merge libcrypto.a and libssl.a in a single static lib. */
+		for target in targets {
+			
+		}
+		
+		/* Merge libcrypto.a and libssl.a in a single dynamic lib. */
+		for target in targets {
+			/* TODO */
 		}
 	}
 	
