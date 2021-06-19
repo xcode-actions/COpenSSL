@@ -104,19 +104,16 @@ struct BuildFramework : ParsableCommand {
 		let sourcesDirectory = buildDirURL.appendingPathComponent("step1_sources-and-builds").path
 		/* The builds from the previous step are installed here. */
 		let installsDirectory = buildDirURL.appendingPathComponent("step2_installs").path
-		/* OpenSSL has two libs we merged into one: COpenSSL. One dir per target. */
-		let mergedStaticDirectory = buildDirURL.appendingPathComponent("step3_merged-libs").appendingPathComponent("static").path
-		let mergedDynamicDirectory = buildDirURL.appendingPathComponent("step3_merged-libs").appendingPathComponent("dynamic").path
 		/* Contains the fat libs, built from prev step. One dir per platform+sdk.
 		 * We have to do this because xcodebuild does not do it automatically when
 		 * building an xcframework (this is understandable), and an xcframework
 		 * splits the underlying framework on platform+sdk, not platform+sdk+arch. */
-		let mergedFatStaticDirectory = buildDirURL.appendingPathComponent("step4_merged-fat-libs").appendingPathComponent("static").path
-		let mergedFatDynamicDirectory = buildDirURL.appendingPathComponent("step4_merged-fat-libs").appendingPathComponent("dynamic").path
+		let mergedFatStaticDirectory = buildDirURL.appendingPathComponent("step3_merged-fat-libs").appendingPathComponent("static").path
+		let mergedFatDynamicDirectory = buildDirURL.appendingPathComponent("step3_merged-fat-libs").appendingPathComponent("dynamic").path
 		/* Contains the dynamic frameworks. The static xcframework will be built
-		 * directly from the .a and headers, but the dynamic one needs fully
+		 * directly from the FAT .a and headers, but the dynamic one needs fully
 		 * built frameworks */
-		let frameworksDirectory = buildDirURL.appendingPathComponent("step5_frameworks").path
+		let frameworksDirectory = buildDirURL.appendingPathComponent("step4_frameworks").path
 		
 		if clean {
 			logger.info("Cleaning previous builds if applicable")
@@ -129,8 +126,6 @@ struct BuildFramework : ParsableCommand {
 		try ensureDirectory(path: buildDirURL.path, fileManager: fm)
 		try ensureDirectory(path: sourcesDirectory, fileManager: fm)
 		try ensureDirectory(path: installsDirectory, fileManager: fm)
-		try ensureDirectory(path: mergedStaticDirectory, fileManager: fm)
-		try ensureDirectory(path: mergedDynamicDirectory, fileManager: fm)
 		try ensureDirectory(path: mergedFatStaticDirectory, fileManager: fm)
 		try ensureDirectory(path: mergedFatDynamicDirectory, fileManager: fm)
 		try ensureDirectory(path: frameworksDirectory, fileManager: fm)
@@ -196,14 +191,12 @@ struct BuildFramework : ParsableCommand {
 			)
 		}
 		
-		/* Merge libcrypto.a and libssl.a in a single static lib. */
+		/* Create one FAT static lib per platform+sdk. */
 		for target in targets {
-			
 		}
 		
-		/* Create FAT libs from merged libs. */
+		/* Create one FAT dylibs per platform+sdk (from static openssl libs). */
 		for target in targets {
-			/* TODO */
 		}
 	}
 	
