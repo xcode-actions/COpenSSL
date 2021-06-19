@@ -31,7 +31,7 @@ struct BuildFramework : ParsableCommand {
 	var clean = false
 	
 	@Flag
-	var skipExistingArtifacts = false
+	var skipExistingArtefacts = false
 	
 	@Option
 	var targets = [
@@ -160,7 +160,7 @@ struct BuildFramework : ParsableCommand {
 			let installDirectoryURL = URL(fileURLWithPath: installsDirectory).appendingPathComponent("\(target)")
 			let extractedSourceDirectoryURL = sourceDirectoryURL.appendingPathComponent(localTarballURL.deletingPathExtension().deletingPathExtension().lastPathComponent)
 			
-			guard !skipExistingArtifacts || !fm.fileExists(atPath: installDirectoryURL.path) else {
+			guard !skipExistingArtefacts || !fm.fileExists(atPath: installDirectoryURL.path) else {
 				logger.info("Skipping building of target \(target) because \(installDirectoryURL.path) exists")
 				continue
 			}
