@@ -14,8 +14,11 @@ import XibLoc
 @available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
 struct BuildFramework : ParsableCommand {
 	
-	@Option(help: "Everything build-framework will create will be in this folder. The folder will be created if it does not exist.")
+	@Option(help: "Everything build-framework will create will be in this folder, except the final xcframeworks. The folder will be created if it does not exist.")
 	var workdir = "./openssl-workdir"
+	
+	@Option(help: "The final xcframeworks will be in this folder. If unset, will be equal to the work dir. The folder will be created if it does not exist.")
+	var resultdir: String?
 	
 	@Option(help: "The base URL from which to download OpenSSL. Everything between double curly braces “{{}}” will be replaced by the OpenSSL version to build.")
 	var opensslBaseURL = "https://www.openssl.org/source/openssl-{{ version }}.tar.gz"
@@ -90,37 +93,47 @@ struct BuildFramework : ParsableCommand {
 		
 		let fm = FileManager.default
 		
+		let workDirURL = URL(fileURLWithPath: workdir, isDirectory: true)
+		let resultDirURL = URL(fileURLWithPath: resultdir ?? workdir, isDirectory: true)
+		let buildDirURL = workDirURL.appendingPathComponent("build")
+		
+		let staticXCFrameworkURL = resultDirURL.appendingPathComponent("COpenSSL-static").appendingPathExtension("xcframework")
+		let dynamicXCFrameworkURL = resultDirURL.appendingPathComponent("COpenSSL-dynamic").appendingPathExtension("xcframework")
+		
 		/* Contains the extracted tarball, config’d and built. One dir per target. */
-		let sourcesDirectory = URL(fileURLWithPath: workdir).appendingPathComponent("step1_sources-and-builds").path
+		let sourcesDirectory = buildDirURL.appendingPathComponent("step1_sources-and-builds").path
 		/* The builds from the previous step are installed here. */
-		let installsDirectory = URL(fileURLWithPath: workdir).appendingPathComponent("step2_installs").path
+		let installsDirectory = buildDirURL.appendingPathComponent("step2_installs").path
 		/* OpenSSL has two libs we merged into one: COpenSSL. One dir per target. */
-		let mergedStaticDirectory = URL(fileURLWithPath: workdir).appendingPathComponent("step3_merged-libs").appendingPathComponent("static").path
-		let mergedDynamicDirectory = URL(fileURLWithPath: workdir).appendingPathComponent("step3_merged-libs").appendingPathComponent("dynamic").path
+		let mergedStaticDirectory = buildDirURL.appendingPathComponent("step3_merged-libs").appendingPathComponent("static").path
+		let mergedDynamicDirectory = buildDirURL.appendingPathComponent("step3_merged-libs").appendingPathComponent("dynamic").path
 		/* Contains the fat libs, built from prev step. One dir per platform+sdk.
 		 * We have to do this because xcodebuild does not do it automatically when
 		 * building an xcframework (this is understandable), and an xcframework
 		 * splits the underlying framework on platform+sdk, not platform+sdk+arch. */
-		let mergedFatStaticDirectory = URL(fileURLWithPath: workdir).appendingPathComponent("step4_merged-fat-libs").appendingPathComponent("static").path
-		let mergedFatDynamicDirectory = URL(fileURLWithPath: workdir).appendingPathComponent("step4_merged-fat-libs").appendingPathComponent("dynamic").path
+		let mergedFatStaticDirectory = buildDirURL.appendingPathComponent("step4_merged-fat-libs").appendingPathComponent("static").path
+		let mergedFatDynamicDirectory = buildDirURL.appendingPathComponent("step4_merged-fat-libs").appendingPathComponent("dynamic").path
+		/* Contains the dynamic frameworks. The static xcframework will be built
+		 * directly from the .a and headers, but the dynamic one needs fully
+		 * built frameworks */
+		let frameworksDirectory = buildDirURL.appendingPathComponent("step5_frameworks").path
 		
 		if clean {
 			logger.info("Cleaning previous builds if applicable")
-			try ensureDirectoryDeleted(path: sourcesDirectory, fileManager: fm)
-			try ensureDirectoryDeleted(path: installsDirectory, fileManager: fm)
-			try ensureDirectoryDeleted(path: mergedStaticDirectory, fileManager: fm)
-			try ensureDirectoryDeleted(path: mergedDynamicDirectory, fileManager: fm)
-			try ensureDirectoryDeleted(path: mergedFatStaticDirectory, fileManager: fm)
-			try ensureDirectoryDeleted(path: mergedFatDynamicDirectory, fileManager: fm)
+			try ensureDirectoryDeleted(path: buildDirURL.path, fileManager: fm)
+			try ensureDirectoryDeleted(path: staticXCFrameworkURL.path, fileManager: fm)
+			try ensureDirectoryDeleted(path: dynamicXCFrameworkURL.path, fileManager: fm)
 		}
 		
 		try ensureDirectory(path: workdir, fileManager: fm)
+		try ensureDirectory(path: buildDirURL.path, fileManager: fm)
 		try ensureDirectory(path: sourcesDirectory, fileManager: fm)
 		try ensureDirectory(path: installsDirectory, fileManager: fm)
 		try ensureDirectory(path: mergedStaticDirectory, fileManager: fm)
 		try ensureDirectory(path: mergedDynamicDirectory, fileManager: fm)
 		try ensureDirectory(path: mergedFatStaticDirectory, fileManager: fm)
 		try ensureDirectory(path: mergedFatDynamicDirectory, fileManager: fm)
+		try ensureDirectory(path: frameworksDirectory, fileManager: fm)
 		
 		fm.changeCurrentDirectoryPath(workdir)
 		
@@ -188,7 +201,7 @@ struct BuildFramework : ParsableCommand {
 			
 		}
 		
-		/* Merge libcrypto.a and libssl.a in a single dynamic lib. */
+		/* Create FAT libs from merged libs. */
 		for target in targets {
 			/* TODO */
 		}
