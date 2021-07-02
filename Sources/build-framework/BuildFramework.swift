@@ -185,9 +185,11 @@ struct BuildFramework : ParsableCommand {
 			}
 			
 			logger.info("Building for target \(target)")
+			#warning("Hard-coded conf path")
 			try buildAndInstallOpenSSL(
 				sourceDirectory: extractedSourceDirectoryURL, installDirectory: installDirectoryURL,
-				target: target, devDir: developerDir, fileManager: fm, logger: logger
+				target: target, devDir: developerDir, configsDir: "/Users/frizlab/Documents/Private/COpenSSL/Files/OpenSSLConfigs/\(opensslVersion)",
+				fileManager: fm, logger: logger
 			)
 		}
 		
@@ -248,7 +250,7 @@ struct BuildFramework : ParsableCommand {
 		return SHA256.hash(data: fileContents).reduce("", { $0 + String(format: "%02x", $1) }) == expectedChecksum.lowercased()
 	}
 	
-	private func buildAndInstallOpenSSL(sourceDirectory: URL, installDirectory: URL, target: Target, devDir: String, fileManager fm: FileManager, logger: Logger) throws {
+	private func buildAndInstallOpenSSL(sourceDirectory: URL, installDirectory: URL, target: Target, devDir: String, configsDir: String, fileManager fm: FileManager, logger: Logger) throws {
 		/* Apparently we *have to* change the CWD */
 		fm.changeCurrentDirectoryPath(sourceDirectory.path)
 		
@@ -259,7 +261,7 @@ struct BuildFramework : ParsableCommand {
 		setenv("CROSS_COMPILE",              "\(devDir)/Toolchains/XcodeDefault.xctoolchain/usr/bin/", 1)
 		setenv("OPENSSLBUILD_SDKs_LOCATION", "\(devDir)/Platforms/\(target.platformLegacyName).platform/Developer", 1)
 		setenv("OPENSSLBUILD_SDK",           "\(target.platformLegacyName).sdk", 1) // TODO: SDK version overrides
-		setenv("OPENSSL_LOCAL_CONFIG_DIR",   "/Users/frizlab/Documents/Private/COpenSSL/Files/OpenSSLConfigs", 1)
+		setenv("OPENSSL_LOCAL_CONFIG_DIR",   configsDir, 1)
 		let configArgs = [
 			"\(target)",
 			"--prefix=\(installDirectory.path)",
