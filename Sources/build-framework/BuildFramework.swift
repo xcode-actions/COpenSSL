@@ -120,21 +120,21 @@ struct BuildFramework : ParsableCommand {
 		
 		if clean {
 			logger.info("Cleaning previous builds if applicable")
-			try ensureDirectoryDeleted(path: buildDirURL.path, fileManager: fm)
-			try ensureDirectoryDeleted(path: staticXCFrameworkURL.path, fileManager: fm)
-			try ensureDirectoryDeleted(path: dynamicXCFrameworkURL.path, fileManager: fm)
+			try fm.ensureDirectoryDeleted(path: buildDirURL.path)
+			try fm.ensureDirectoryDeleted(path: staticXCFrameworkURL.path)
+			try fm.ensureDirectoryDeleted(path: dynamicXCFrameworkURL.path)
 		}
 		
-		try ensureDirectory(path: workdir, fileManager: fm)
-		try ensureDirectory(path: buildDirURL.path, fileManager: fm)
-		try ensureDirectory(path: sourcesDirectory, fileManager: fm)
-		try ensureDirectory(path: installsDirectory, fileManager: fm)
-		try ensureDirectory(path: fatStaticDirectory, fileManager: fm)
-		try ensureDirectory(path: libObjectsDirectory, fileManager: fm)
-		try ensureDirectory(path: dylibsDirectory, fileManager: fm)
-		try ensureDirectory(path: mergedFatStaticDirectory, fileManager: fm)
-		try ensureDirectory(path: mergedFatDynamicDirectory, fileManager: fm)
-		try ensureDirectory(path: frameworksDirectory, fileManager: fm)
+		try fm.ensureDirectory(path: workdir)
+		try fm.ensureDirectory(path: buildDirURL.path)
+		try fm.ensureDirectory(path: sourcesDirectory)
+		try fm.ensureDirectory(path: installsDirectory)
+		try fm.ensureDirectory(path: fatStaticDirectory)
+		try fm.ensureDirectory(path: libObjectsDirectory)
+		try fm.ensureDirectory(path: dylibsDirectory)
+		try fm.ensureDirectory(path: mergedFatStaticDirectory)
+		try fm.ensureDirectory(path: mergedFatDynamicDirectory)
+		try fm.ensureDirectory(path: frameworksDirectory)
 		
 		fm.changeCurrentDirectoryPath(workdir)
 		
@@ -268,16 +268,40 @@ struct BuildFramework : ParsableCommand {
 			}
 			
 			/* Create FAT static libs, one per lib */
-			do {
-				let dest = URL(fileURLWithPath: fatStaticDirectory, isDirectory: true).appendingPathComponent("\(platformAndSdk)").appendingPathComponent("OpenSSL.a")
+			for lib in libs {
+				let dest = URL(fileURLWithPath: fatStaticDirectory, isDirectory: true).appendingPathComponent("\(platformAndSdk)").appendingPathComponent(lib)
+				guard !skipExistingArtefacts || !fm.fileExists(atPath: dest.path) else {
+					logger.info("Skipping creation of \(dest.path) because it already exists")
+					continue
+				}
+				try fm.ensureDirectory(path: dest.deletingLastPathComponent().path)
+				try fm.ensureFileDeleted(path: dest.path)
+				
+				logger.info("Creating FAT lib \(dest.path) from \(targets.count) lib(s)")
+				try Process.spawnAndStreamEnsuringSuccess(
+					"/usr/bin/xcrun",
+					args: ["lipo", "-create"] + targets.map{ URL(fileURLWithPath: installsDirectory).appendingPathComponent("\($0)").appendingPathComponent(lib).path } + ["-output", dest.path],
+					outputHandler: Process.logProcessOutputFactory(logger: logger)
+				)
 			}
-			let staticLibDestURL  = URL(fileURLWithPath: mergedFatStaticDirectory, isDirectory: true).appendingPathComponent("\(platformAndSdk)").appendingPathComponent("OpenSSL.a")
-			let dynamicLibDestURL = URL(fileURLWithPath: mergedFatStaticDirectory, isDirectory: true).appendingPathComponent("\(platformAndSdk)").appendingPathComponent("OpenSSL.dylib")
-			try ensureDirectory(path: staticLibDestURL.path,  fileManager: fm)
-			try ensureDirectory(path: dynamicLibDestURL.path, fileManager: fm)
 			
 			/* Create merged FAT static lib */
-//			try Process.spawnAndStreamEnsuringSuccess("/usr/bin/xcrun", args: ["lipo", "-create", ..., "-output", ], outputHandler: Process.logProcessOutputFactory(logger: logger))
+			do {
+				let dest = URL(fileURLWithPath: mergedFatStaticDirectory, isDirectory: true).appendingPathComponent("\(platformAndSdk)").appendingPathComponent("libOpenSSL.a")
+				guard !skipExistingArtefacts || !fm.fileExists(atPath: dest.path) else {
+					logger.info("Skipping creation of \(dest.path) because it already exists")
+					continue
+				}
+				try fm.ensureDirectory(path: dest.deletingLastPathComponent().path)
+				try fm.ensureFileDeleted(path: dest.path)
+				
+				logger.info("Merging \(libs.count) lib(s) to \(dest.path)")
+				try Process.spawnAndStreamEnsuringSuccess(
+					"/usr/bin/xcrun",
+					args: ["libtool", "-static", "-o", dest.path] + libs.map{ URL(fileURLWithPath: fatStaticDirectory, isDirectory: true).appendingPathComponent("\(platformAndSdk)").appendingPathComponent($0).path },
+					outputHandler: Process.logProcessOutputFactory(logger: logger)
+				)
+			}
 			
 			/* Create FAT dylib from static lib */
 		}
@@ -311,29 +335,6 @@ struct BuildFramework : ParsableCommand {
 		return Int(ncpu)
 	}()
 	
-	private func ensureDirectory(path: String, fileManager fm: FileManager) throws {
-		var isDir = ObjCBool(false)
-		if !fm.fileExists(atPath: path, isDirectory: &isDir) {
-			try fm.createDirectory(at: URL(fileURLWithPath: path), withIntermediateDirectories: true, attributes: nil)
-		} else {
-			guard isDir.boolValue else {
-				struct ExpectedDir : Error {var path: String}
-				throw ExpectedDir(path: path)
-			}
-		}
-	}
-	
-	private func ensureDirectoryDeleted(path: String, fileManager fm: FileManager) throws {
-		var isDir = ObjCBool(false)
-		if fm.fileExists(atPath: path, isDirectory: &isDir) {
-			guard isDir.boolValue else {
-				struct ExpectedDir : Error {var path: String}
-				throw ExpectedDir(path: path)
-			}
-			try fm.removeItem(at: URL(fileURLWithPath: path))
-		}
-	}
-	
 	private func checkChecksum(file: URL, expectedChecksum: String?) throws -> Bool {
 		guard let expectedChecksum = expectedChecksum else {
 			return true
@@ -354,7 +355,7 @@ struct BuildFramework : ParsableCommand {
 		/* Extract tarball in source directory. If the tarball was already
 		 * there, tar will overwrite existing files (but does not remove
 		 * additional files). */
-		try ensureDirectory(path: sourceDirectory.path, fileManager: fm)
+		try fm.ensureDirectory(path: sourceDirectory.path)
 		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/tar", args: ["xf", tarballURL.path, "-C", sourceDirectory.path], outputHandler: Process.logProcessOutputFactory(logger: logger))
 		
 		var isDir = ObjCBool(false)

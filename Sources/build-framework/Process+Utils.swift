@@ -9,13 +9,13 @@ import XcodeTools
 
 extension Process {
 	
-	public static func logProcessOutputFactory(logger: Logger) -> (String, FileDescriptor) -> Void {
+	public static func logProcessOutputFactory(logger: Logger, logLevel: Logger.Level = .trace) -> (String, FileDescriptor) -> Void {
 		return { line, fd in
 			let trimmedLine = line.trimmingCharacters(in: .newlines)
 			switch fd {
-				case .standardOutput: logger.trace("stdout: \(trimmedLine)")
-				case .standardError:  logger.trace("stderr: \(trimmedLine)")
-				default:              logger.trace("unknown fd: \(trimmedLine)")
+				case .standardOutput: logger.log(level: logLevel, "stdout: \(trimmedLine)")
+				case .standardError:  logger.log(level: logLevel, "stderr: \(trimmedLine)")
+				default:              logger.log(level: logLevel, "unknown fd: \(trimmedLine)")
 			}
 		}
 	}
