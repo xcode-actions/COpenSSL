@@ -101,19 +101,22 @@ struct BuildFramework : ParsableCommand {
 		let dynamicXCFrameworkURL = resultDirURL.appendingPathComponent("COpenSSL-dynamic").appendingPathExtension("xcframework")
 		
 		/* Contains the extracted tarball, config’d and built. One dir per target. */
-		let sourcesDirectory = buildDirURL.appendingPathComponent("step1_sources-and-builds").path
+		let sourcesDirectory = buildDirURL.appendingPathComponent("step1.sources-and-builds").path
 		/* The builds from the previous step are installed here. */
-		let installsDirectory = buildDirURL.appendingPathComponent("step2_installs").path
+		let installsDirectory = buildDirURL.appendingPathComponent("step2.installs").path
+		let fatStaticDirectory = buildDirURL.appendingPathComponent("step3.lib-derivatives").appendingPathComponent("fat-static-libs").path
+		let libObjectsDirectory = buildDirURL.appendingPathComponent("step3.lib-derivatives").appendingPathComponent("lib-objects").path
+		let dylibsDirectory = buildDirURL.appendingPathComponent("step3.lib-derivatives").appendingPathComponent("merged-dynamic-libs").path
 		/* Contains the fat libs, built from prev step. One dir per platform+sdk.
 		 * We have to do this because xcodebuild does not do it automatically when
 		 * building an xcframework (this is understandable), and an xcframework
 		 * splits the underlying framework on platform+sdk, not platform+sdk+arch. */
-		let mergedFatStaticDirectory = buildDirURL.appendingPathComponent("step3_merged-fat-libs").appendingPathComponent("static").path
-		let mergedFatDynamicDirectory = buildDirURL.appendingPathComponent("step3_merged-fat-libs").appendingPathComponent("dynamic").path
+		let mergedFatStaticDirectory = buildDirURL.appendingPathComponent("step4.merged-fat-libs").appendingPathComponent("static").path
+		let mergedFatDynamicDirectory = buildDirURL.appendingPathComponent("step4.merged-fat-libs").appendingPathComponent("dynamic").path
 		/* Contains the dynamic frameworks. The static xcframework will be built
 		 * directly from the FAT .a and headers, but the dynamic one needs fully
 		 * built frameworks */
-		let frameworksDirectory = buildDirURL.appendingPathComponent("step4_frameworks").path
+		let frameworksDirectory = buildDirURL.appendingPathComponent("step5.frameworks").path
 		
 		if clean {
 			logger.info("Cleaning previous builds if applicable")
@@ -126,6 +129,9 @@ struct BuildFramework : ParsableCommand {
 		try ensureDirectory(path: buildDirURL.path, fileManager: fm)
 		try ensureDirectory(path: sourcesDirectory, fileManager: fm)
 		try ensureDirectory(path: installsDirectory, fileManager: fm)
+		try ensureDirectory(path: fatStaticDirectory, fileManager: fm)
+		try ensureDirectory(path: libObjectsDirectory, fileManager: fm)
+		try ensureDirectory(path: dylibsDirectory, fileManager: fm)
 		try ensureDirectory(path: mergedFatStaticDirectory, fileManager: fm)
 		try ensureDirectory(path: mergedFatDynamicDirectory, fileManager: fm)
 		try ensureDirectory(path: frameworksDirectory, fileManager: fm)
@@ -163,46 +169,133 @@ struct BuildFramework : ParsableCommand {
 		
 		/* Build all the variants we need. Note only static libs are built because
 		 * we merge them later in a single dyn lib to create a single framework. */
+		var headersByTargets = [Target: [String]]() /* Key is target, value is array of relative path from install dir (e.g. "include/openssl/aes.h") */
+		var staticLibsByTargets = [Target: [String]]() /* Key is target, value is array of relative path from install dir (e.g. "lib/libcrypto.a") */
 		for target in targets {
 			let sourceDirectoryURL = URL(fileURLWithPath: sourcesDirectory).appendingPathComponent("\(target)")
 			let installDirectoryURL = URL(fileURLWithPath: installsDirectory).appendingPathComponent("\(target)")
-			let extractedSourceDirectoryURL = sourceDirectoryURL.appendingPathComponent(localTarballURL.deletingPathExtension().deletingPathExtension().lastPathComponent)
 			
-			guard !skipExistingArtefacts || !fm.fileExists(atPath: installDirectoryURL.path) else {
-				logger.info("Skipping building of target \(target) because \(installDirectoryURL.path) exists")
-				continue
-			}
-			
-			/* Extract tarball in source directory. If the tarball was already
-			 * there, tar will overwrite existing files. */
-			try ensureDirectory(path: sourceDirectoryURL.path, fileManager: fm)
-			try Process.spawnAndStreamEnsuringSuccess("/usr/bin/tar", args: ["xf", localTarballURL.path, "-C", sourceDirectoryURL.path], outputHandler: Process.logProcessOutputFactory(logger: logger))
-			
-			var isDir = ObjCBool(false)
-			guard fm.fileExists(atPath: extractedSourceDirectoryURL.path, isDirectory: &isDir), isDir.boolValue else {
-				struct ExtractedTarballNotFound : Error {var expectedPath: String}
-				throw ExtractedTarballNotFound(expectedPath: extractedSourceDirectoryURL.path)
-			}
-			
-			logger.info("Building for target \(target)")
-			#warning("Hard-coded conf path")
-			try buildAndInstallOpenSSL(
-				sourceDirectory: extractedSourceDirectoryURL, installDirectory: installDirectoryURL,
-				target: target, devDir: developerDir, configsDir: "/Users/frizlab/Documents/Private/COpenSSL/Files/OpenSSLConfigs/\(opensslVersion)",
-				fileManager: fm, logger: logger
+			/* First build OpenSSL */
+			try extractBuildAndInstallOpenSSLIfNeeded(
+				tarballURL: localTarballURL,
+				sourceDirectory: sourceDirectoryURL, installDirectory: installDirectoryURL,
+				target: target, devDir: developerDir, fileManager: fm, logger: logger
 			)
+			
+			/* Then retrieve the list of files we care about */
+			let exclusions = try [
+				NSRegularExpression(pattern: #"^\.DS_Store$"#, options: []),
+				NSRegularExpression(pattern: #"/\.DS_Store$"#, options: [])
+			]
+			try ListFiles.iterateFiles(in: installDirectoryURL, exclude: exclusions, handler: { url, relativePath, isDir in
+				func checkFileLocation(expectedLocation: [String], fileType: String) {
+					if relativePath.components(separatedBy: "/").dropLast() != expectedLocation {
+						logger.warning("found \(fileType) at unexpected location: \(relativePath)", metadata: ["target": "\(target)", "path_root": "\(installDirectoryURL.path)"])
+					}
+				}
+				
+				switch (isDir, url.pathExtension) {
+					case (true, _): (/*nop*/)
+						
+					case (false, "a"):
+						/* We found a static lib. Let’s check its location and add it. */
+						checkFileLocation(expectedLocation: ["lib"], fileType: "lib")
+						staticLibsByTargets[target, default: []].append(relativePath)
+						
+					case (false, "h"):
+						/* We found a header lib. Let’s check its location and add it. */
+						checkFileLocation(expectedLocation: ["include", "openssl"], fileType: "header")
+						headersByTargets[target, default: []].append(relativePath)
+						
+					case (false, ""):
+						/* Binary. We don’t care about binaries. But let’s check it is
+						 * at an expected location. */
+						checkFileLocation(expectedLocation: ["bin"], fileType: "binary")
+						
+					case (false, "pc"):
+						/* pkgconfig file. We don’t care about those. But let’s check
+						 * this one is at an expected location. */
+						checkFileLocation(expectedLocation: ["lib", "pkgconfig"], fileType: "pc file")
+						
+					case (false, _):
+						logger.warning("found unknown file: \(relativePath)", metadata: ["target": "\(target)", "path_root": "\(installDirectoryURL.path)"])
+				}
+				return true
+			})
 		}
 		
-		/* Create one FAT static lib per platform+sdk. */
-		for target in targets {
-		}
+		let targetsByPlatformAndSdks = Dictionary(grouping: targets, by: { PlatformAndSdk(platform: $0.platform, sdk: $0.sdk) })
 		
-		/* Create one FAT dylibs per platform+sdk (from static openssl libs). */
-		for target in targets {
+		/* Create one FAT static lib and one FAT dylib per platform+sdk w/ some
+		 * derivatives first to get there.
+		 * Also validate all the targets in a platform+sdk tuple have the same
+		 * headers. If they don’t, we won’t be able to use the same headers to
+		 * create a single framework for the tuple. */
+		for (platformAndSdk, targets) in targetsByPlatformAndSdks {
+			let firstTarget = targets.first! /* Safe because of the way targetsByPlatformAndSdks is built. */
+			
+			/* First let’s check all targets have the same headers and libs for
+			 * this platform/sdk tuple */
+			let refLibs = staticLibsByTargets[targets.first!, default: []]
+			let refHeaders = headersByTargets[targets.first!, default: []]
+			for target in targets {
+				let currentLibs = staticLibsByTargets[target, default: []]
+				let currentHeaders = headersByTargets[target, default: []]
+				guard currentHeaders == refHeaders else {
+					struct IncompatibleHeadersBetweenTargetsForSamePlatformAndSdk : Error {
+						var refTarget: Target
+						var refHeaders: [String]
+						var currentTarget: Target
+						var currentHeaders: [String]
+					}
+					throw IncompatibleHeadersBetweenTargetsForSamePlatformAndSdk(
+						refTarget: firstTarget, refHeaders: refHeaders,
+						currentTarget: target, currentHeaders: currentHeaders
+					)
+				}
+				guard currentLibs == refLibs else {
+					struct IncompatibleLibsBetweenTargetsForSamePlatformAndSdk : Error {
+						var refTarget: Target
+						var refLibs: [String]
+						var currentTarget: Target
+						var currentLibs: [String]
+					}
+					throw IncompatibleLibsBetweenTargetsForSamePlatformAndSdk(
+						refTarget: firstTarget, refLibs: refLibs,
+						currentTarget: target, currentLibs: currentLibs
+					)
+				}
+			}
+			
+			/* Create FAT static libs, one per lib */
+			do {
+				let dest = URL(fileURLWithPath: fatStaticDirectory, isDirectory: true).appendingPathComponent("\(platformAndSdk)").appendingPathComponent("OpenSSL.a")
+			}
+			let staticLibDestURL  = URL(fileURLWithPath: mergedFatStaticDirectory, isDirectory: true).appendingPathComponent("\(platformAndSdk)").appendingPathComponent("OpenSSL.a")
+			let dynamicLibDestURL = URL(fileURLWithPath: mergedFatStaticDirectory, isDirectory: true).appendingPathComponent("\(platformAndSdk)").appendingPathComponent("OpenSSL.dylib")
+			try ensureDirectory(path: staticLibDestURL.path,  fileManager: fm)
+			try ensureDirectory(path: dynamicLibDestURL.path, fileManager: fm)
+			
+			/* Create merged FAT static lib */
+//			try Process.spawnAndStreamEnsuringSuccess("/usr/bin/xcrun", args: ["lipo", "-create", ..., "-output", ], outputHandler: Process.logProcessOutputFactory(logger: logger))
+			
+			/* Create FAT dylib from static lib */
 		}
 	}
 	
-	var numberOfCores: Int? = {
+	private struct PlatformAndSdk : Hashable, CustomStringConvertible {
+		
+		var platform: String
+		var sdk: String
+		
+		var description: String {
+			/* We assume the sdk and platform are valid (do not contain dashes). */
+			return [sdk, platform].joined(separator: "-")
+		}
+		
+	}
+	
+	private var numberOfCores: Int? = {
 		guard MemoryLayout<Int32>.size <= MemoryLayout<Int>.size else {
 //			logger.notice("Int32 is bigger than Int (\(MemoryLayout<Int32>.size) > \(MemoryLayout<Int>.size)). Cannot return the number of cores.")
 			return nil
@@ -250,9 +343,41 @@ struct BuildFramework : ParsableCommand {
 		return SHA256.hash(data: fileContents).reduce("", { $0 + String(format: "%02x", $1) }) == expectedChecksum.lowercased()
 	}
 	
+	private func extractBuildAndInstallOpenSSLIfNeeded(tarballURL: URL, sourceDirectory: URL, installDirectory: URL, target: Target, devDir: String, fileManager fm: FileManager, logger: Logger) throws {
+		guard !skipExistingArtefacts || !fm.fileExists(atPath: installDirectory.path) else {
+			logger.info("Skipping building of target \(target) because \(installDirectory.path) exists")
+			return
+		}
+		
+		let extractedSourceDirectoryURL = sourceDirectory.appendingPathComponent(tarballURL.deletingPathExtension().deletingPathExtension().lastPathComponent)
+		
+		/* Extract tarball in source directory. If the tarball was already
+		 * there, tar will overwrite existing files (but does not remove
+		 * additional files). */
+		try ensureDirectory(path: sourceDirectory.path, fileManager: fm)
+		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/tar", args: ["xf", tarballURL.path, "-C", sourceDirectory.path], outputHandler: Process.logProcessOutputFactory(logger: logger))
+		
+		var isDir = ObjCBool(false)
+		guard fm.fileExists(atPath: extractedSourceDirectoryURL.path, isDirectory: &isDir), isDir.boolValue else {
+			struct ExtractedTarballNotFound : Error {var expectedPath: String}
+			throw ExtractedTarballNotFound(expectedPath: extractedSourceDirectoryURL.path)
+		}
+		
+		logger.info("Building for target \(target)")
+		#warning("Hard-coded conf path")
+		try buildAndInstallOpenSSL(
+			sourceDirectory: extractedSourceDirectoryURL, installDirectory: installDirectory,
+			target: target, devDir: devDir, configsDir: "/Users/frizlab/Documents/Private/COpenSSL/Files/OpenSSLConfigs/\(opensslVersion)",
+			fileManager: fm, logger: logger
+		)
+	}
+	
 	private func buildAndInstallOpenSSL(sourceDirectory: URL, installDirectory: URL, target: Target, devDir: String, configsDir: String, fileManager fm: FileManager, logger: Logger) throws {
-		/* Apparently we *have to* change the CWD */
+		/* Apparently we *have to* change the CWD (though we should do it through
+		 * Process which has an API for that). */
+		let previousCwd = fm.currentDirectoryPath
 		fm.changeCurrentDirectoryPath(sourceDirectory.path)
+		defer {fm.changeCurrentDirectoryPath(previousCwd)}
 		
 		/* Prepare -j option for make */
 		let multicoreMakeOption = numberOfCores.flatMap{ ["-j", "\($0)"] } ?? []
@@ -272,10 +397,10 @@ struct BuildFramework : ParsableCommand {
 		try Process.spawnAndStreamEnsuringSuccess(sourceDirectory.appendingPathComponent("Configure").path, args: configArgs, outputHandler: Process.logProcessOutputFactory(logger: logger))
 		
 		/* *** Build *** */
-		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/make", args: multicoreMakeOption, outputHandler: Process.logProcessOutputFactory(logger: logger))
+		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/xcrun", args: ["make"] + multicoreMakeOption, outputHandler: Process.logProcessOutputFactory(logger: logger))
 		
 		/* *** Install *** */
-		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/make", args: ["install_sw"] + multicoreMakeOption, outputHandler: Process.logProcessOutputFactory(logger: logger))
+		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/xcrun", args: ["make", "install_sw"] + multicoreMakeOption, outputHandler: Process.logProcessOutputFactory(logger: logger))
 	}
 	
 }

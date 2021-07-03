@@ -4,7 +4,7 @@ import ArgumentParser
 
 
 
-struct Target : ExpressibleByArgument, CustomStringConvertible {
+struct Target : Hashable, ExpressibleByArgument, CustomStringConvertible {
 	
 	var sdk: String
 	var platform: String
