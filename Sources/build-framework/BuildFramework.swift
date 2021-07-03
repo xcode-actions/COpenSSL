@@ -187,6 +187,8 @@ struct BuildFramework : ParsableCommand {
 				NSRegularExpression(pattern: #"^\.DS_Store$"#, options: []),
 				NSRegularExpression(pattern: #"/\.DS_Store$"#, options: [])
 			]
+			var headers = [String]()
+			var staticLibs = [String]()
 			try ListFiles.iterateFiles(in: installDirectoryURL, exclude: exclusions, handler: { url, relativePath, isDir in
 				func checkFileLocation(expectedLocation: [String], fileType: String) {
 					if relativePath.components(separatedBy: "/").dropLast() != expectedLocation {
@@ -200,12 +202,12 @@ struct BuildFramework : ParsableCommand {
 					case (false, "a"):
 						/* We found a static lib. Let’s check its location and add it. */
 						checkFileLocation(expectedLocation: ["lib"], fileType: "lib")
-						staticLibsByTargets[target, default: []].append(relativePath)
+						staticLibs.append(relativePath)
 						
 					case (false, "h"):
 						/* We found a header lib. Let’s check its location and add it. */
 						checkFileLocation(expectedLocation: ["include", "openssl"], fileType: "header")
-						headersByTargets[target, default: []].append(relativePath)
+						headers.append(relativePath)
 						
 					case (false, ""):
 						/* Binary. We don’t care about binaries. But let’s check it is
@@ -222,6 +224,38 @@ struct BuildFramework : ParsableCommand {
 				}
 				return true
 			})
+			assert(headersByTargets[target] == nil)
+			assert(staticLibsByTargets[target] == nil)
+			headersByTargets[target] = headers
+			staticLibsByTargets[target] = staticLibs
+			
+			/* Let’s extract the static libraries’ objects in a folder. We’ll use
+			 * this to build the dynamic libraries. */
+			libObjects: do {
+				let destinationDirectory = URL(fileURLWithPath: libObjectsDirectory).appendingPathComponent("\(target)")
+				guard !skipExistingArtefacts || !fm.fileExists(atPath: destinationDirectory.path) else {
+					logger.info("Skipping static lib extract for target \(target) because \(destinationDirectory.path) already exists")
+					break libObjects
+				}
+				try fm.ensureDirectoryDeleted(path: destinationDirectory.path)
+				try fm.ensureDirectory(path: destinationDirectory.path)
+				
+				/* Apparently we *have to* change the CWD (though we should do it
+				 * through Process which has an API for that). */
+				let previousCwd = fm.currentDirectoryPath
+				fm.changeCurrentDirectoryPath(destinationDirectory.path)
+				defer {fm.changeCurrentDirectoryPath(previousCwd)}
+				
+				for staticLib in staticLibs {
+					let fullStaticLibPath = installDirectoryURL.appendingPathComponent(staticLib).path
+					logger.info("Extracting \(fullStaticLibPath) to \(destinationDirectory.path)")
+					try Process.spawnAndStreamEnsuringSuccess(
+						"/usr/bin/xcrun",
+						args: ["ar", "-x", fullStaticLibPath],
+						outputHandler: Process.logProcessOutputFactory(logger: logger)
+					)
+				}
+			}
 		}
 		
 		let targetsByPlatformAndSdks = Dictionary(grouping: targets, by: { PlatformAndSdk(platform: $0.platform, sdk: $0.sdk) })
