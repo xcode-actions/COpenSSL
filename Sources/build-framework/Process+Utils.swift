@@ -9,7 +9,7 @@ import XcodeTools
 
 extension Process {
 	
-	public static func logProcessOutputFactory(logger: Logger, logLevel: Logger.Level = .trace) -> (String, FileDescriptor) -> Void {
+	public static func logProcessOutputFactory(logger: Logger, logLevel: Logger.Level = .debug) -> (String, FileDescriptor) -> Void {
 		return { line, fd in
 			let trimmedLine = line.trimmingCharacters(in: .newlines)
 			switch fd {

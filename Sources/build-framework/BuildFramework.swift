@@ -229,6 +229,8 @@ struct BuildFramework : ParsableCommand {
 			headersByTargets[target] = headers
 			staticLibsByTargets[target] = staticLibs
 			
+			let staticLibURLs = staticLibs.map{ installDirectoryURL.appendingPathComponent($0) }
+			
 			/* Let’s extract the static libraries’ objects in a folder. We’ll use
 			 * this to build the dynamic libraries. */
 			libObjects: do {
@@ -246,8 +248,8 @@ struct BuildFramework : ParsableCommand {
 				fm.changeCurrentDirectoryPath(destinationDirectory.path)
 				defer {fm.changeCurrentDirectoryPath(previousCwd)}
 				
-				for staticLib in staticLibs {
-					let fullStaticLibPath = installDirectoryURL.appendingPathComponent(staticLib).path
+				for staticLibURL in staticLibURLs {
+					let fullStaticLibPath = staticLibURL.path
 					logger.info("Extracting \(fullStaticLibPath) to \(destinationDirectory.path)")
 					try Process.spawnAndStreamEnsuringSuccess(
 						"/usr/bin/xcrun",
@@ -255,6 +257,47 @@ struct BuildFramework : ParsableCommand {
 						outputHandler: Process.logProcessOutputFactory(logger: logger)
 					)
 				}
+			}
+			
+			/* Now we build the dynamic libraries. We’ll use those to get FAT
+			 * dynamic libraries later. */
+			dylibs: do {
+				let destination = URL(fileURLWithPath: dylibsDirectory).appendingPathComponent("\(target)").appendingPathComponent("libOpenSSL.dylib")
+				guard !skipExistingArtefacts || !fm.fileExists(atPath: destination.path) else {
+					logger.info("Skipping dynamic lib creation for target \(target) because \(destination.path) already exists")
+					break dylibs
+				}
+				try fm.ensureDirectoryDeleted(path: destination.deletingLastPathComponent().path)
+				try fm.ensureDirectory(path: destination.deletingLastPathComponent().path)
+				
+				let (sdk, minSdk) = try getSdkVersions(staticLibURLs, logger: logger)
+				logger.debug("got sdk \(sdk), min sdk \(minSdk)", metadata: ["target": "\(target)"])
+				
+				let objectDirectory = URL(fileURLWithPath: libObjectsDirectory).appendingPathComponent("\(target)")
+				let objectFiles = try fm.contentsOfDirectory(atPath: objectDirectory.path).filter{ $0.hasSuffix(".o") }.map{ objectDirectory.appendingPathComponent($0).path }
+				logger.info("Creating dylib at \(destination.path) from objects in \(objectDirectory.path)")
+				try Process.spawnAndStreamEnsuringSuccess(
+					"/usr/bin/xcrun",
+					args: ["ld"] + objectFiles + [
+						"-dylib", "-lSystem",
+						"-application_extension",
+						"-bitcode_bundle",
+						"-arch", target.arch,
+						"-platform_version", target.platformVersionName, minSdk, sdk,
+						"-syslibroot", "\(developerDir)/Platforms/\(target.platformLegacyName).platform/Developer/SDKs/\(target.platformLegacyName).sdk",
+						"-compatibility_version", normalizedOpenSSLVersion(opensslVersion), /* Not true, but we do not care; the resulting lib will be in a framework which will be embedded in the app and not reused 99.99% of the time, so… */
+						"-current_version", normalizedOpenSSLVersion(opensslVersion),
+						"-o", destination.path
+					],
+					outputHandler: Process.logProcessOutputFactory(logger: logger)
+				)
+				#warning("Remember to do this when we create the dynamic framework")
+//				logger.info("Updating install name of dylib at \(destination.path)")
+//				try Process.spawnAndStreamEnsuringSuccess(
+//					"/usr/bin/xcrun",
+//					args: ["install_name_tool", "-id", "@rpath/OpenSSL.framework/OpenSSL", destination.path],
+//					outputHandler: Process.logProcessOutputFactory(logger: logger)
+//				)
 			}
 		}
 		
@@ -376,6 +419,109 @@ struct BuildFramework : ParsableCommand {
 		
 		let fileContents = try Data(contentsOf: file)
 		return SHA256.hash(data: fileContents).reduce("", { $0 + String(format: "%02x", $1) }) == expectedChecksum.lowercased()
+	}
+	
+	private func normalizedOpenSSLVersion(_ version: String) -> String {
+		if let letter = version.last, let ascii = letter.asciiValue, letter.isLetter, letter.isLowercase {
+			/* We probably have a version of the for “1.2.3a” (we should do more
+			 * checks but it’s late and I’m lazy).
+			 * Let’s convert the letter to a number (a=01, b=02, j=10, etc.) and
+			 * replace it with the number.
+			 * For 1.2.3a for instance, we get 1.2.301 */
+			let base = version.dropLast()
+			let value = ascii - Character("a").asciiValue! + 1
+			return base + String(format: "%02d", value)
+		}
+		/* TODO: I think we’ll have to drop the beta from beta versions. */
+		return version
+	}
+	
+	/* Inspect Mach-O load commands to get minimum SDK version.
+	 *
+	 * Depending on the actual minimum SDK version it may look like this for
+	 * modern SDKs:
+	 *
+	 *     Load command 1
+	 *            cmd LC_BUILD_VERSION
+	 *        cmdsize 24
+	 *       platform 8
+	 *            sdk 13.2                   <-- target SDK
+	 *          minos 12.0                   <-- minimum SDK
+	 *         ntools 0
+	 *
+	 * Or like this for older versions, with a platform-dependent tag:
+	 *
+	 *     Load command 1
+	 *           cmd LC_VERSION_MIN_WATCHOS
+	 *       cmdsize 16
+	 *       version 4.0                     <-- minimum SDK
+	 *           sdk 6.1                     <-- target SDK */
+	private func getSdkVersions(_ libs: [URL], logger: Logger) throws -> (sdk: String, minSdk: String) {
+		var sdk: String?
+		var minSdk: String?
+		for lib in libs {
+			var error: Error?
+			var lastCommand: String?
+			let outputHandler: (String, FileDescriptor) -> Void = { line, fd in
+				guard error == nil else {return}
+				
+				let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+				let lastWord = String(trimmedLine.split(separator: " ").last ?? "")
+				switch fd {
+					case .standardOutput:
+						switch trimmedLine {
+							case let str where str.hasPrefix("Load command "): lastCommand = nil
+							case let str where str.hasPrefix("cmd "):          lastCommand = lastWord
+							case let str where (
+								(str.hasPrefix("minos ")   && lastCommand == "LC_BUILD_VERSION") ||
+								(str.hasPrefix("version ") && (lastCommand ?? "").hasPrefix("LC_VERSION_MIN_"))
+							):
+								if minSdk == nil {minSdk = lastWord}
+								else {
+									guard minSdk == lastWord else {
+										logger.error("found min sdk \(lastWord) but current min sdk is \(minSdk ?? "<nil>")")
+										struct MultipleMinSdkVersionFound : Error {var libs: [URL]}
+										error = MultipleMinSdkVersionFound(libs: libs)
+										return
+									}
+								}
+							case let str where (
+								str.hasPrefix("sdk ") && (lastCommand == "LC_BUILD_VERSION" || (lastCommand ?? "").hasPrefix("LC_VERSION_MIN_"))
+							):
+								guard lastWord != "n/a" else {return}
+								if sdk == nil {sdk = lastWord}
+								else {
+									guard sdk == lastWord else {
+										logger.error("found sdk \(lastWord) but current sdk is \(sdk ?? "<nil>")")
+										struct MultipleSdkVersionFound : Error {var libs: [URL]}
+										error = MultipleSdkVersionFound(libs: libs)
+										return
+									}
+								}
+								
+							default: (/*nop: we simply ignore the line*/)
+						}
+						
+					case .standardError: logger.debug("otool trimmed stderr: \(trimmedLine)")
+					default:             logger.debug("otool trimmed unknown fd: \(trimmedLine)")
+				}
+			}
+			try Process.spawnAndStreamEnsuringSuccess(
+				"/usr/bin/xcrun",
+				args: ["otool", "-l", lib.path],
+				outputHandler: outputHandler
+			)
+			if let e = error {throw e}
+		}
+		guard let sdkNonOptional = sdk else {
+			struct CannotGetSdk : Error {var libs: [URL]}
+			throw CannotGetSdk(libs: libs)
+		}
+		guard let minSdkNonOptional = minSdk else {
+			struct CannotGetMinSdk : Error {var libs: [URL]}
+			throw CannotGetMinSdk(libs: libs)
+		}
+		return (sdkNonOptional, minSdkNonOptional)
 	}
 	
 	private func extractBuildAndInstallOpenSSLIfNeeded(tarballURL: URL, sourceDirectory: URL, installDirectory: URL, target: Target, devDir: String, fileManager fm: FileManager, logger: Logger) throws {

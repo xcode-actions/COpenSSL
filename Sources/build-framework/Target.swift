@@ -48,4 +48,18 @@ struct Target : Hashable, ExpressibleByArgument, CustomStringConvertible {
 		}
 	}
 	
+	var platformVersionName: String {
+		switch (platform, sdk) {
+			case ("macOS", "iOS"):         return "mac-catalyst"
+			case ("macOS", _):             return "macos"
+			case ("iOS", _):               return "ios"
+			case ("iOS_Simulator", _):     return "ios-simulator"
+			case ("tvOS", _):              return "tvos"
+			case ("tvOS_Simulator", _):    return "tvos-simulator"
+			case ("watchOS", _):           return "watchos"
+			case ("watchOS_Simulator", _): return "watchos-simulator"
+			default: return platform.lowercased().replacingOccurrences(of: "_", with: "-")
+		}
+	}
+	
 }
