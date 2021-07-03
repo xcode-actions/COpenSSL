@@ -236,12 +236,12 @@ struct BuildFramework : ParsableCommand {
 			
 			/* First let’s check all targets have the same headers and libs for
 			 * this platform/sdk tuple */
-			let refLibs = staticLibsByTargets[targets.first!, default: []]
-			let refHeaders = headersByTargets[targets.first!, default: []]
+			let libs = staticLibsByTargets[targets.first!, default: []]
+			let headers = headersByTargets[targets.first!, default: []]
 			for target in targets {
 				let currentLibs = staticLibsByTargets[target, default: []]
 				let currentHeaders = headersByTargets[target, default: []]
-				guard currentHeaders == refHeaders else {
+				guard currentHeaders == headers else {
 					struct IncompatibleHeadersBetweenTargetsForSamePlatformAndSdk : Error {
 						var refTarget: Target
 						var refHeaders: [String]
@@ -249,11 +249,11 @@ struct BuildFramework : ParsableCommand {
 						var currentHeaders: [String]
 					}
 					throw IncompatibleHeadersBetweenTargetsForSamePlatformAndSdk(
-						refTarget: firstTarget, refHeaders: refHeaders,
+						refTarget: firstTarget, refHeaders: headers,
 						currentTarget: target, currentHeaders: currentHeaders
 					)
 				}
-				guard currentLibs == refLibs else {
+				guard currentLibs == libs else {
 					struct IncompatibleLibsBetweenTargetsForSamePlatformAndSdk : Error {
 						var refTarget: Target
 						var refLibs: [String]
@@ -261,7 +261,7 @@ struct BuildFramework : ParsableCommand {
 						var currentLibs: [String]
 					}
 					throw IncompatibleLibsBetweenTargetsForSamePlatformAndSdk(
-						refTarget: firstTarget, refLibs: refLibs,
+						refTarget: firstTarget, refLibs: libs,
 						currentTarget: target, currentLibs: currentLibs
 					)
 				}
