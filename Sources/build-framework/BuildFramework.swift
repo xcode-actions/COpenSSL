@@ -380,7 +380,7 @@ struct BuildFramework : ParsableCommand {
 				)
 			}
 			
-			/* Create FAT dylib from static lib */
+			/* Create FAT dylib from the dylibs generated earlier */
 		}
 	}
 	
