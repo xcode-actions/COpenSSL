@@ -286,11 +286,11 @@ struct BuildFramework : ParsableCommand {
 			}
 			
 			/* Create merged FAT static lib */
-			do {
+			mergeFatStatic: do {
 				let dest = URL(fileURLWithPath: mergedFatStaticDirectory, isDirectory: true).appendingPathComponent("\(platformAndSdk)").appendingPathComponent("libOpenSSL.a")
 				guard !skipExistingArtefacts || !fm.fileExists(atPath: dest.path) else {
 					logger.info("Skipping creation of \(dest.path) because it already exists")
-					continue
+					break mergeFatStatic
 				}
 				try fm.ensureDirectory(path: dest.deletingLastPathComponent().path)
 				try fm.ensureFileDeleted(path: dest.path)
