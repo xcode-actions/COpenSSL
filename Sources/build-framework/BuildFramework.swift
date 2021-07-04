@@ -131,10 +131,12 @@ struct BuildFramework : ParsableCommand {
 		 * splits the underlying framework on platform+sdk, not platform+sdk+arch. */
 		let mergedFatStaticDirectory = buildDirURL.appendingPathComponent("step4.merged-fat-libs").appendingPathComponent("static").path
 		let mergedFatDynamicDirectory = buildDirURL.appendingPathComponent("step4.merged-fat-libs").appendingPathComponent("dynamic").path
-		/* Contains the dynamic frameworks. The static xcframework will be built
-		 * directly from the FAT .a and headers, but the dynamic one needs fully
-		 * built frameworks */
-		let frameworksDirectory = buildDirURL.appendingPathComponent("step5.frameworks").path
+		/* Contains the final frameworks from which the dynamic xcframework will
+		 * be built. */
+		let finalFrameworksDirectory = buildDirURL.appendingPathComponent("step5.final-frameworks-and-libs").appendingPathComponent("frameworks").path
+		/* Contains the final full static lib install (with headers) from which
+		 * the static xcframework will be built. */
+		let finalLibsDirectory = buildDirURL.appendingPathComponent("step5.final-frameworks-and-libs").appendingPathComponent("libs").path
 		
 		if clean {
 			logger.info("Cleaning previous builds if applicable")
@@ -152,7 +154,8 @@ struct BuildFramework : ParsableCommand {
 		try fm.ensureDirectory(path: dylibsDirectory)
 		try fm.ensureDirectory(path: mergedFatStaticDirectory)
 		try fm.ensureDirectory(path: mergedFatDynamicDirectory)
-		try fm.ensureDirectory(path: frameworksDirectory)
+		try fm.ensureDirectory(path: finalFrameworksDirectory)
+		try fm.ensureDirectory(path: finalLibsDirectory)
 		
 		fm.changeCurrentDirectoryPath(workdir)
 		
