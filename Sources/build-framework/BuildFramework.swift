@@ -381,6 +381,22 @@ struct BuildFramework : ParsableCommand {
 			}
 			
 			/* Create FAT dylib from the dylibs generated earlier */
+			fatDylib: do {
+				let dest = URL(fileURLWithPath: mergedFatDynamicDirectory, isDirectory: true).appendingPathComponent("\(platformAndSdk)").appendingPathComponent("libOpenSSL.dylib")
+				guard !skipExistingArtefacts || !fm.fileExists(atPath: dest.path) else {
+					logger.info("Skipping creation of \(dest.path) because it already exists")
+					break fatDylib
+				}
+				try fm.ensureDirectory(path: dest.deletingLastPathComponent().path)
+				try fm.ensureFileDeleted(path: dest.path)
+				
+				logger.info("Creating FAT dylib \(dest.path) from \(targets.count) lib(s)")
+				try Process.spawnAndStreamEnsuringSuccess(
+					"/usr/bin/xcrun",
+					args: ["lipo", "-create"] + targets.map{ URL(fileURLWithPath: dylibsDirectory).appendingPathComponent("\($0)").appendingPathComponent("libOpenSSL.dylib").path } + ["-output", dest.path],
+					outputHandler: Process.logProcessOutputFactory(logger: logger)
+				)
+			}
 		}
 	}
 	
