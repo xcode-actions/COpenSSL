@@ -66,20 +66,35 @@ struct BuildFramework : ParsableCommand {
 		Target(sdk: "watchOS", platform: "watchOS_Simulator", arch: "i386")
 	]
 	
+	@Option(name: .customLong("macos-sdk-version"))
+	var macOSSDKVersion: String?
+	
 	@Option(name: .customLong("macos-min-sdk-version"))
-	var macOSMinSDKVersion = "10.15"
+	var macOSMinSDKVersion: String?
+	
+	@Option(name: .customLong("ios-sdk-version"))
+	var iOSSDKVersion: String?
 	
 	@Option(name: .customLong("ios-min-sdk-version"))
-	var iOSMinSDKVersion = "12.0"
+	var iOSMinSDKVersion: String?
 	
 	@Option
-	var catalystMinSDKVersion="13.0"
+	var catalystSDKVersion: String?
+	
+	@Option
+	var catalystMinSDKVersion: String?
+	
+	@Option(name: .customLong("watchos-sdk-version"))
+	var watchOSSDKVersion: String?
 	
 	@Option(name: .customLong("watchos-min-sdk-version"))
-	var watchOSMinSDKVersion="4.0"
+	var watchOSMinSDKVersion: String?
+	
+	@Option(name: .customLong("tvos-sdk-version"))
+	var tvOSSDKVersion: String?
 	
 	@Option(name: .customLong("tvos-min-sdk-version"))
-	var tvOSMinSDKVersion="12.0"
+	var tvOSMinSDKVersion: String?
 	
 	func run() async throws {
 		LoggingSystem.bootstrap{ _ in CLTLogger() }
@@ -592,10 +607,29 @@ struct BuildFramework : ParsableCommand {
 		let multicoreMakeOption = numberOfCores.flatMap{ ["-j", "\($0)"] } ?? []
 		
 		/* *** Configure *** */
+		let sdkVersion: String?
+		let minSDKVersion: String?
+		switch target.platform {
+			case   "macOS": (sdkVersion, minSDKVersion) = (  macOSSDKVersion,   macOSMinSDKVersion)
+			case     "iOS": (sdkVersion, minSDKVersion) = (    iOSSDKVersion,     iOSMinSDKVersion)
+			case    "tvOS": (sdkVersion, minSDKVersion) = (   tvOSSDKVersion,    tvOSMinSDKVersion)
+			case "watchOS": (sdkVersion, minSDKVersion) = (watchOSSDKVersion, watchOSMinSDKVersion)
+			default:        (sdkVersion, minSDKVersion) = (nil, nil)
+		}
 		setenv("CROSS_COMPILE",              "\(devDir)/Toolchains/XcodeDefault.xctoolchain/usr/bin/", 1)
 		setenv("OPENSSLBUILD_SDKs_LOCATION", "\(devDir)/Platforms/\(target.platformLegacyName).platform/Developer", 1)
-		setenv("OPENSSLBUILD_SDK",           "\(target.platformLegacyName).sdk", 1) // TODO: SDK version overrides
+		setenv("OPENSSLBUILD_SDK",           "\(target.platformLegacyName)\(sdkVersion ?? "").sdk", 1)
 		setenv("OPENSSL_LOCAL_CONFIG_DIR",   configsDir, 1)
+		if let sdkVersion = sdkVersion {setenv("OPENSSLBUILD_SDKVERSION", sdkVersion, 1)}
+		else                           {unsetenv("OPENSSLBUILD_SDKVERSION")}
+		if let minSDKVersion = minSDKVersion {setenv("OPENSSLBUILD_MIN_SDKVERSION", minSDKVersion, 1)}
+		else                                 {unsetenv("OPENSSLBUILD_MIN_SDKVERSION")}
+		/* We currently do not support disabling bitcode (because we do not check
+		 * if bitcode is enabled when calling ld later, and ld fails for some
+		 * target if called with bitcode when linking objects that do not have
+		 * bitcode). */
+//		if disableBitcode {setenv("OPENSSLBUILD_DISABLE_BITCODE", "true", 1)}
+//		else              {unsetenv("OPENSSLBUILD_DISABLE_BITCODE")}
 		let configArgs = [
 			"\(target)",
 			"--prefix=\(installDirectory.path)",
