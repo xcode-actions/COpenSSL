@@ -14,6 +14,9 @@ import XibLoc
 @available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
 struct BuildFramework : ParsableCommand {
 	
+	@Option(help: "The path to the “Files” directory, containing some resources to build OpenSSL.")
+	var filesPath = Self.defaultFilesFolderURL.path
+	
 	@Option(help: "Everything build-framework will create will be in this folder, except the final xcframeworks. The folder will be created if it does not exist.")
 	var workdir = "./openssl-workdir"
 	
@@ -412,6 +415,16 @@ struct BuildFramework : ParsableCommand {
 		
 	}
 	
+	private static var defaultFilesFolderURL: URL {
+		var base = Bundle.main.bundleURL.deletingLastPathComponent()
+		if base.pathComponents.contains("DerivedData") {
+			base = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+		} else if base.pathComponents.contains(".build") {
+			base = base.deletingLastPathComponent().deletingLastPathComponent()
+		}
+		return base.appendingPathComponent("Files")
+	}
+	
 	private var numberOfCores: Int? = {
 		guard MemoryLayout<Int32>.size <= MemoryLayout<Int>.size else {
 //			logger.notice("Int32 is bigger than Int (\(MemoryLayout<Int32>.size) > \(MemoryLayout<Int>.size)). Cannot return the number of cores.")
@@ -561,10 +574,9 @@ struct BuildFramework : ParsableCommand {
 		}
 		
 		logger.info("Building for target \(target)")
-		#warning("Hard-coded conf path")
 		try buildAndInstallOpenSSL(
 			sourceDirectory: extractedSourceDirectoryURL, installDirectory: installDirectory,
-			target: target, devDir: devDir, configsDir: "/Users/frizlab/Documents/Private/COpenSSL/Files/OpenSSLConfigs/\(opensslVersion)",
+			target: target, devDir: devDir, configsDir: URL(fileURLWithPath: filesPath).appendingPathComponent("OpenSSLConfigs").appendingPathComponent(opensslVersion).path,
 			fileManager: fm, logger: logger
 		)
 	}
