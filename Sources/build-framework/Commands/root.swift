@@ -177,23 +177,11 @@ struct BuildFramework : ParsableCommand {
 			
 			/* Create FAT static libs, one per lib */
 			for lib in builtTarget.staticLibraries {
-//				let dest = URL(fileURLWithPath: fatStaticDirectory, isDirectory: true).appendingPathComponent("\(platformAndSdk)").appendingPathComponent(lib)
-//				guard !skipExistingArtifacts || !fm.fileExists(atPath: dest.path) else {
-//					logger.info("Skipping creation of \(dest.path) because it already exists")
-//					continue
-//				}
-//				try fm.ensureDirectory(path: dest.deletingLastPathComponent().path)
-//				try fm.ensureFileDeleted(path: dest.path)
-			
-//				logger.info("Creating FAT lib \(dest.path) from \(targets.count) lib(s)")
-//				try Process.spawnAndStreamEnsuringSuccess(
-//					"/usr/bin/xcrun",
-//					args: ["lipo", "-create"] + targets.map{ URL(fileURLWithPath: installsDirectory).appendingPathComponent("\($0)").appendingPathComponent(lib).path } + ["-output", dest.path],
-//					outputHandler: Process.logProcessOutputFactory(logger: logger)
-//				)
+				let unbuiltFATLib = UnbuiltFATLib(libs: targets.map{ buildPaths.installDir(for: $0).pushing(lib) }, skipExistingArtifacts: skipExistingArtifacts)
+				try unbuiltFATLib.buildFATLib(at: buildPaths.fatStaticDir.appending(platformAndSdk.pathComponent).pushing(lib))
 			}
 			
-//			/* Create merged FAT static lib */
+			/* Create merged FAT static lib */
 //			mergeFatStatic: do {
 //				let dest = URL(fileURLWithPath: mergedFatStaticDirectory, isDirectory: true).appendingPathComponent("\(platformAndSdk)").appendingPathComponent("libOpenSSL.a")
 //				guard !skipExistingArtifacts || !fm.fileExists(atPath: dest.path) else {
@@ -211,25 +199,13 @@ struct BuildFramework : ParsableCommand {
 //				)
 //			}
 			
-//			/* Create FAT dylib from the dylibs generated earlier */
-//			fatDylib: do {
-//				let dest = URL(fileURLWithPath: mergedFatDynamicDirectory, isDirectory: true).appendingPathComponent("\(platformAndSdk)").appendingPathComponent("libOpenSSL.dylib")
-//				guard !skipExistingArtifacts || !fm.fileExists(atPath: dest.path) else {
-//					logger.info("Skipping creation of \(dest.path) because it already exists")
-//					break fatDylib
-//				}
-//				try fm.ensureDirectory(path: dest.deletingLastPathComponent().path)
-//				try fm.ensureFileDeleted(path: dest.path)
+			/* Create FAT dylib from the dylibs generated earlier */
+			do {
+				let unbuiltFATLib = UnbuiltFATLib(libs: targets.map{ buildPaths.dylibsDir(for: $0).pushing("libOpenSSL.dylib") }, skipExistingArtifacts: skipExistingArtifacts)
+				try unbuiltFATLib.buildFATLib(at: buildPaths.mergedFatDynamicLibsDir.appending(platformAndSdk.pathComponent).pushing("libOpenSSL.dylib"))
+			}
 			
-//				logger.info("Creating FAT dylib \(dest.path) from \(targets.count) lib(s)")
-//				try Process.spawnAndStreamEnsuringSuccess(
-//					"/usr/bin/xcrun",
-//					args: ["lipo", "-create"] + targets.map{ URL(fileURLWithPath: dylibsDirectory).appendingPathComponent("\($0)").appendingPathComponent("libOpenSSL.dylib").path } + ["-output", dest.path],
-//					outputHandler: Process.logProcessOutputFactory(logger: logger)
-//				)
-//			}
-			
-//			/* Create the framework from the dylib, headers, and other templates. */
+			/* Create the framework from the dylib, headers, and other templates. */
 //			framework: do {
 //				let dest = URL(fileURLWithPath: finalFrameworksDirectory, isDirectory: true).appendingPathComponent("\(platformAndSdk)").appendingPathComponent("OpenSSL.framework")
 //				guard !skipExistingArtifacts || !fm.fileExists(atPath: dest.path) else {
@@ -246,6 +222,12 @@ struct BuildFramework : ParsableCommand {
 		
 		var platform: String
 		var sdk: String
+		
+		var pathComponent: FilePath.Component {
+			/* The forced-unwrap is **not** fully safe! But the same assumption is
+			 * made in Target from which the PlatformAndSdk objects are built. */
+			return FilePath.Component(description)!
+		}
 		
 		var description: String {
 			/* We assume the sdk and platform are valid (do not contain dashes). */
