@@ -243,6 +243,7 @@ struct BuiltTarget {
 	}
 	
 	private func normalizedOpenSSLVersion(_ version: String) -> String {
+		let version = String(version.split(separator: "-").first ?? "") /* We remove all beta reference (example of version with beta: 3.0.0-beta1) */
 		if let letter = version.last, let ascii = letter.asciiValue, letter.isLetter, letter.isLowercase {
 			/* We probably have a version of the for “1.2.3a” (we should do more
 			 * checks but it’s late and I’m lazy).

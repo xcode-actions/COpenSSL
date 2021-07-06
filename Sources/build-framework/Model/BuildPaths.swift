@@ -166,7 +166,7 @@ struct BuildPaths {
 					 * or the current extension has a dash. If we have a dash we drop
 					 * everything after it including it and try again. */
 					if let idx = component.string.lastIndex(of: "-") {
-						currentVersion = String(component.string[idx..<component.string.endIndex])
+						currentVersion = String(component.string[component.string.startIndex..<idx])
 					} else {
 						struct ConfigDirNotFoundForVersion : Error {var version: String}
 						throw ConfigDirNotFoundForVersion(version: version)
