@@ -17,7 +17,7 @@ struct Tarball {
 	
 	let expectedShasum: String?
 	
-	/** The name of the tarball without the extension. Usually the name of the
+	/** The name of the tarball without the extensions. Usually the name of the
 	 folder inside the tarball. */
 	let stem: String
 	
@@ -40,9 +40,10 @@ struct Tarball {
 		
 		self.expectedShasum = expectedShasum
 		
-		/* Let’s compute the stem (always remove extension until there are none). */
+		/* Let’s compute the stem (always remove extension until we found one that
+		 * has a number in it or there are none left). */
 		var component = tarballPathComponent
-		while let newComponent = FilePath.Component(component.stem), newComponent != component {
+		while !(component.extension?.contains(where: { $0.isNumber }) ?? false), let newComponent = FilePath.Component(component.stem), newComponent != component {
 			component = newComponent
 		}
 		stem = component.string
