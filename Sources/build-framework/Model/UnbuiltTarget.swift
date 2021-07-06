@@ -16,6 +16,8 @@ struct UnbuiltTarget {
 	let minSDKVersion: String?
 	let opensslVersion: String
 	
+	let disableBitcode: Bool
+	
 	let skipExistingArtifacts: Bool
 	
 	func buildTarget(fileManager fm: FileManager, logger: Logger) throws -> BuiltTarget {
@@ -71,12 +73,8 @@ struct UnbuiltTarget {
 		else                           {unsetenv("OPENSSLBUILD_SDKVERSION")}
 		if let minSDKVersion = minSDKVersion {setenv("OPENSSLBUILD_MIN_SDKVERSION", minSDKVersion, 1)}
 		else                                 {unsetenv("OPENSSLBUILD_MIN_SDKVERSION")}
-		/* We currently do not support disabling bitcode (because we do not check
-		 * if bitcode is enabled when calling ld later, and ld fails for some
-		 * target if called with bitcode when linking objects that do not have
-		 * bitcode). */
-//		if disableBitcode {setenv("OPENSSLBUILD_DISABLE_BITCODE", "true", 1)}
-//		else              {unsetenv("OPENSSLBUILD_DISABLE_BITCODE")}
+		if disableBitcode {setenv("OPENSSLBUILD_DISABLE_BITCODE", "true", 1)}
+		else              {unsetenv("OPENSSLBUILD_DISABLE_BITCODE")}
 		let configArgs = [
 			target.openSSLConfigName,
 			"--prefix=\(installDir.string)",

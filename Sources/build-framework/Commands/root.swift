@@ -32,6 +32,9 @@ struct BuildFramework : ParsableCommand {
 	var expectedTarballShasum: String?
 	
 	@Flag
+	var disableBitcode = false
+	
+	@Flag
 	var clean = false
 	
 	@Flag
@@ -129,7 +132,7 @@ struct BuildFramework : ParsableCommand {
 				case "watchOS": (sdkVersion, minSDKVersion) = (watchOSSDKVersion, watchOSMinSDKVersion)
 				default:        (sdkVersion, minSDKVersion) = (nil, nil)
 			}
-			let unbuiltTarget = UnbuiltTarget(target: target, tarball: tarball, buildPaths: buildPaths, sdkVersion: sdkVersion, minSDKVersion: minSDKVersion, opensslVersion: opensslVersion, skipExistingArtifacts: skipExistingArtifacts)
+			let unbuiltTarget = UnbuiltTarget(target: target, tarball: tarball, buildPaths: buildPaths, sdkVersion: sdkVersion, minSDKVersion: minSDKVersion, opensslVersion: opensslVersion, disableBitcode: disableBitcode, skipExistingArtifacts: skipExistingArtifacts)
 			let builtTarget = try unbuiltTarget.buildTarget(fileManager: fm, logger: logger)
 			
 			assert(builtTargets[target] == nil)
