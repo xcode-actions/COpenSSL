@@ -1,9 +1,11 @@
 import Foundation
 
 import ArgumentParser
+import SystemPackage
 
 
 
+@available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
 struct Target : Hashable, ExpressibleByArgument, CustomStringConvertible {
 	
 	var sdk: String
@@ -19,10 +21,18 @@ struct Target : Hashable, ExpressibleByArgument, CustomStringConvertible {
 	init?(argument: String) {
 		let components = argument.split(separator: "-", omittingEmptySubsequences: false)
 		guard components.count == 3 else {return nil}
+		guard components.first(where: { $0 == "" || $0.contains("/") }) == nil else {return nil}
 		
 		self.sdk      = String(components[0])
 		self.platform = String(components[1])
 		self.arch     = String(components[2])
+	}
+	
+	var pathComponent: FilePath.Component {
+		/* The forced-unwrap is **not** fully safe! But it should be most of the
+		 * time (protected when the Target is inited from an argument), so for
+		 * once, we don’t care… */
+		return FilePath.Component(openSSLConfigName)!
 	}
 	
 	/** The name in the config file we provide to OpenSSL */
