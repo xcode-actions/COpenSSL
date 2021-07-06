@@ -20,20 +20,20 @@ struct UnbuiltTarget {
 	
 	let skipExistingArtifacts: Bool
 	
-	func buildTarget(fileManager fm: FileManager, logger: Logger) throws -> BuiltTarget {
+	func buildTarget() throws -> BuiltTarget {
 		let sourceDir = buildPaths.sourceDir(for: target)
 		let installDir = buildPaths.installDir(for: target)
-		try extractTarballBuildAndInstallIfNeeded(installDir: installDir, sourceDir: sourceDir, fileManager: fm, logger: logger)
+		try extractTarballBuildAndInstallIfNeeded(installDir: installDir, sourceDir: sourceDir)
 		
-		let (headers, staticLibs) = try retrieveArtifacts(fileManager: fm, logger: logger)
+		let (headers, staticLibs) = try retrieveArtifacts()
 		return BuiltTarget(target: target, sourceFolder: sourceDir, installFolder: installDir, staticLibraries: staticLibs, dynamicLibraries: [], headers: headers, resources: [])
 	}
 	
-	private func extractTarballBuildAndInstallIfNeeded(installDir: FilePath, sourceDir: FilePath, fileManager fm: FileManager, logger: Logger) throws {
-		let opensslConfigDir = try buildPaths.opensslConfigsDir(for: opensslVersion, fileManager: fm)
+	private func extractTarballBuildAndInstallIfNeeded(installDir: FilePath, sourceDir: FilePath) throws {
+		let opensslConfigDir = try buildPaths.opensslConfigsDir(for: opensslVersion)
 		
-		guard !skipExistingArtifacts || !fm.fileExists(atPath: installDir.string) else {
-			logger.info("Skipping building of target \(target) because \(installDir) exists")
+		guard !skipExistingArtifacts || !Config.fm.fileExists(atPath: installDir.string) else {
+			Config.logger.info("Skipping building of target \(target) because \(installDir) exists")
 			return
 		}
 		
@@ -42,17 +42,17 @@ struct UnbuiltTarget {
 		/* Extract tarball in source directory. If the tarball was already there,
 		 * tar will overwrite existing files (but will not remove additional
 		 * files). */
-		let extractedTarballDir = try tarball.extract(in: sourceDir, fileManager: fm, logger: logger)
+		let extractedTarballDir = try tarball.extract(in: sourceDir)
 		
 		/* ********* BUILD & INSTALL ********* */
 		
-		logger.info("Building for target \(target)")
+		Config.logger.info("Building for target \(target)")
 		
 		/* Apparently we *have to* change the CWD (though we should do it through
 		 * Process which has an API for that). */
-		let previousCwd = fm.currentDirectoryPath
-		fm.changeCurrentDirectoryPath(extractedTarballDir.string)
-		defer {fm.changeCurrentDirectoryPath(previousCwd)}
+		let previousCwd = Config.fm.currentDirectoryPath
+		Config.fm.changeCurrentDirectoryPath(extractedTarballDir.string)
+		defer {Config.fm.changeCurrentDirectoryPath(previousCwd)}
 		
 		/* Prepare -j option for make */
 		let multicoreMakeOption = Self.numberOfCores.flatMap{ ["-j", "\($0)"] } ?? []
@@ -82,16 +82,16 @@ struct UnbuiltTarget {
 			"no-shared",
 			"no-tests"
 		] + (target.arch.hasSuffix("64") ? ["enable-ec_nistp_64_gcc_128"] : [])
-		try Process.spawnAndStreamEnsuringSuccess(extractedTarballDir.appending("Configure").string, args: configArgs, outputHandler: Process.logProcessOutputFactory(logger: logger))
+		try Process.spawnAndStreamEnsuringSuccess(extractedTarballDir.appending("Configure").string, args: configArgs, outputHandler: Process.logProcessOutputFactory())
 		
 		/* *** Build *** */
-		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/xcrun", args: ["make"] + multicoreMakeOption, outputHandler: Process.logProcessOutputFactory(logger: logger))
+		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/xcrun", args: ["make"] + multicoreMakeOption, outputHandler: Process.logProcessOutputFactory())
 		
 		/* *** Install *** */
-		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/xcrun", args: ["make", "install_sw"] + multicoreMakeOption, outputHandler: Process.logProcessOutputFactory(logger: logger))
+		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/xcrun", args: ["make", "install_sw"] + multicoreMakeOption, outputHandler: Process.logProcessOutputFactory())
 	}
 	
-	private func retrieveArtifacts(fileManager fm: FileManager, logger: Logger) throws -> (headers: [FilePath], staticLibs: [FilePath]) {
+	private func retrieveArtifacts() throws -> (headers: [FilePath], staticLibs: [FilePath]) {
 		let installDir = buildPaths.installDir(for: target)
 		let exclusions = try [
 			NSRegularExpression(pattern: #"^\.DS_Store$"#, options: []),
@@ -100,10 +100,10 @@ struct UnbuiltTarget {
 		
 		var headers = [FilePath]()
 		var staticLibs = [FilePath]()
-		try fm.iterateFiles(in: installDir, exclude: exclusions, handler: { fullPath, relativePath, isDir in
+		try Config.fm.iterateFiles(in: installDir, exclude: exclusions, handler: { fullPath, relativePath, isDir in
 			func checkFileLocation(expectedLocation: FilePath, fileType: String) {
 				if !relativePath.starts(with: expectedLocation) {
-					logger.warning("found \(fileType) at unexpected location: \(relativePath)", metadata: ["target": "\(target)", "path_root": "\(installDir)"])
+					Config.logger.warning("found \(fileType) at unexpected location: \(relativePath)", metadata: ["target": "\(target)", "path_root": "\(installDir)"])
 				}
 			}
 			
@@ -131,7 +131,7 @@ struct UnbuiltTarget {
 					checkFileLocation(expectedLocation: "lib/pkgconfig", fileType: "pc file")
 					
 				case (false, _):
-					logger.warning("found unknown file: \(relativePath)", metadata: ["target": "\(target)", "path_root": "\(installDir)"])
+					Config.logger.warning("found unknown file: \(relativePath)", metadata: ["target": "\(target)", "path_root": "\(installDir)"])
 			}
 			return true
 		})

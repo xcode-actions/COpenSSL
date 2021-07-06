@@ -101,28 +101,28 @@ struct BuildPaths {
 		self.finalStaticLibsAndHeadersDir = self.buildDir.appending("step5.final-frameworks-and-libs/static-libs-and-headers")
 	}
 	
-	func clean(fileManager fm: FileManager) throws {
-		try fm.ensureDirectoryDeleted(path: buildDir)
-		try fm.ensureDirectoryDeleted(path: resultXCFrameworkStatic)
-		try fm.ensureDirectoryDeleted(path: resultXCFrameworkDynamic)
+	func clean() throws {
+		try Config.fm.ensureDirectoryDeleted(path: buildDir)
+		try Config.fm.ensureDirectoryDeleted(path: resultXCFrameworkStatic)
+		try Config.fm.ensureDirectoryDeleted(path: resultXCFrameworkDynamic)
 	}
 	
-	func ensureAllDirectoriesExist(fileManager fm: FileManager) throws {
-		try fm.ensureDirectory(path: workDir)
-		try fm.ensureDirectory(path: resultDir)
-		try fm.ensureDirectory(path: buildDir)
+	func ensureAllDirectoriesExist() throws {
+		try Config.fm.ensureDirectory(path: workDir)
+		try Config.fm.ensureDirectory(path: resultDir)
+		try Config.fm.ensureDirectory(path: buildDir)
 		
-		try fm.ensureDirectory(path: sourcesDir)
-		try fm.ensureDirectory(path: installsDir)
-		try fm.ensureDirectory(path: fatStaticDir)
-		try fm.ensureDirectory(path: libObjectsDir)
-		try fm.ensureDirectory(path: dylibsDir)
+		try Config.fm.ensureDirectory(path: sourcesDir)
+		try Config.fm.ensureDirectory(path: installsDir)
+		try Config.fm.ensureDirectory(path: fatStaticDir)
+		try Config.fm.ensureDirectory(path: libObjectsDir)
+		try Config.fm.ensureDirectory(path: dylibsDir)
 		
-		try fm.ensureDirectory(path: mergedFatStaticLibsDir)
-		try fm.ensureDirectory(path: mergedFatDynamicLibsDir)
+		try Config.fm.ensureDirectory(path: mergedFatStaticLibsDir)
+		try Config.fm.ensureDirectory(path: mergedFatDynamicLibsDir)
 		
-		try fm.ensureDirectory(path: finalFrameworksDir)
-		try fm.ensureDirectory(path: finalStaticLibsAndHeadersDir)
+		try Config.fm.ensureDirectory(path: finalFrameworksDir)
+		try Config.fm.ensureDirectory(path: finalStaticLibsAndHeadersDir)
 	}
 	
 	func sourceDir(for target: Target) -> FilePath {
@@ -141,7 +141,7 @@ struct BuildPaths {
 		return dylibsDir.appending(target.pathComponent)
 	}
 	
-	func opensslConfigsDir(for version: String, fileManager fm: FileManager) throws -> FilePath {
+	func opensslConfigsDir(for version: String) throws -> FilePath {
 		var currentVersion = version
 		while true {
 			guard let component = FilePath.Component(currentVersion) else {
@@ -152,7 +152,7 @@ struct BuildPaths {
 			let path = opensslConfigsDir.appending(component)
 			
 			var isDir = ObjCBool(false)
-			if fm.fileExists(atPath: path.string, isDirectory: &isDir) {
+			if Config.fm.fileExists(atPath: path.string, isDirectory: &isDir) {
 				guard isDir.boolValue else {
 					struct ConfigDirIsAFile : Error {var path: FilePath}
 					throw ConfigDirIsAFile(path: path)

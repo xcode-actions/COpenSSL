@@ -11,4 +11,6 @@ struct UnbuiltFramework {
 	/** The framework resources, except for the Info.plist */
 	var resources: [FilePath]
 	
+	let skipExistingArtifacts: Bool
+	
 }

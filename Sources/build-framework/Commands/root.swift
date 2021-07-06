@@ -100,23 +100,17 @@ struct BuildFramework : ParsableCommand {
 	func run() async throws {
 		LoggingSystem.bootstrap{ _ in CLTLogger() }
 		XcodeTools.XcodeToolsConfig.logger?.logLevel = .warning
-		let logger = { () -> Logger in
-			var ret = Logger(label: "me.frizlab.build-openssl")
-			ret.logLevel = .debug
-			return ret
-		}()
 		
-		let fm = FileManager.default
 		let buildPaths = try BuildPaths(filesPath: FilePath(filesPath), workdir: FilePath(workdir), resultdir: resultdir.flatMap{ FilePath($0) }, productName: "COpenSSL")
 		
 		if clean {
-			logger.info("Cleaning previous builds if applicable")
-			try buildPaths.clean(fileManager: fm)
+			Config.logger.info("Cleaning previous builds if applicable")
+			try buildPaths.clean()
 		}
-		try buildPaths.ensureAllDirectoriesExist(fileManager: fm)
+		try buildPaths.ensureAllDirectoriesExist()
 		
-		let tarball = try Tarball(templateURL: opensslBaseURL, version: opensslVersion, downloadFolder: buildPaths.workDir, expectedShasum: expectedTarballShasum, logger: logger)
-		try await tarball.ensureDownloaded(fileManager: fm, logger: logger)
+		let tarball = try Tarball(templateURL: opensslBaseURL, version: opensslVersion, downloadFolder: buildPaths.workDir, expectedShasum: expectedTarballShasum)
+		try await tarball.ensureDownloaded()
 		
 		/* Build all the variants we need. Note only static libs are built because
 		 * we merge them later in a single dyn lib to create a single framework. */
@@ -133,13 +127,13 @@ struct BuildFramework : ParsableCommand {
 				default:        (sdkVersion, minSDKVersion) = (nil, nil)
 			}
 			let unbuiltTarget = UnbuiltTarget(target: target, tarball: tarball, buildPaths: buildPaths, sdkVersion: sdkVersion, minSDKVersion: minSDKVersion, opensslVersion: opensslVersion, disableBitcode: disableBitcode, skipExistingArtifacts: skipExistingArtifacts)
-			let builtTarget = try unbuiltTarget.buildTarget(fileManager: fm, logger: logger)
+			let builtTarget = try unbuiltTarget.buildTarget()
 			
 			assert(builtTargets[target] == nil)
 			builtTargets[target] = builtTarget
 			
 			assert(dylibs[target] == nil)
-			dylibs[target] = try builtTarget.buildDylibFromStaticLibs(opensslVersion: opensslVersion, buildPaths: buildPaths, skipExistingArtifacts: skipExistingArtifacts, fileManager: fm, logger: logger)
+			dylibs[target] = try builtTarget.buildDylibFromStaticLibs(opensslVersion: opensslVersion, buildPaths: buildPaths, skipExistingArtifacts: skipExistingArtifacts)
 		}
 		
 		let targetsByPlatformAndSdks = Dictionary(grouping: targets, by: { PlatformAndSdk(platform: $0.platform, sdk: $0.sdk) })
@@ -182,7 +176,7 @@ struct BuildFramework : ParsableCommand {
 			}
 			
 			/* Create FAT static libs, one per lib */
-//			for lib in builtTarget.staticLibraries {
+			for lib in builtTarget.staticLibraries {
 //				let dest = URL(fileURLWithPath: fatStaticDirectory, isDirectory: true).appendingPathComponent("\(platformAndSdk)").appendingPathComponent(lib)
 //				guard !skipExistingArtifacts || !fm.fileExists(atPath: dest.path) else {
 //					logger.info("Skipping creation of \(dest.path) because it already exists")
@@ -197,7 +191,7 @@ struct BuildFramework : ParsableCommand {
 //					args: ["lipo", "-create"] + targets.map{ URL(fileURLWithPath: installsDirectory).appendingPathComponent("\($0)").appendingPathComponent(lib).path } + ["-output", dest.path],
 //					outputHandler: Process.logProcessOutputFactory(logger: logger)
 //				)
-//			}
+			}
 			
 //			/* Create merged FAT static lib */
 //			mergeFatStatic: do {

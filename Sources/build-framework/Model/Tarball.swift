@@ -21,9 +21,9 @@ struct Tarball {
 	 folder inside the tarball. */
 	let stem: String
 	
-	init(templateURL: String, version: String, downloadFolder: FilePath, expectedShasum: String?, logger: Logger) throws {
+	init(templateURL: String, version: String, downloadFolder: FilePath, expectedShasum: String?) throws {
 		let tarballStringURL = templateURL.applying(xibLocInfo: Str2StrXibLocInfo(simpleSourceTypeReplacements: [OneWordTokens(leftToken: "{{", rightToken: "}}"): { _ in version }], identityReplacement: { $0 })!)
-		logger.debug("Tarball URL as string: \(tarballStringURL)")
+		Config.logger.debug("Tarball URL as string: \(tarballStringURL)")
 		
 		guard let tarballURL = URL(string: tarballStringURL) else {
 			struct TarballURLIsNotValid : Error {var stringURL: String}
@@ -51,12 +51,12 @@ struct Tarball {
 	
 	/* TODO: At some point in the future, the Logger will probably be retrievable
 	 *       from the current Task context. For now, we pass it along. */
-	func ensureDownloaded(fileManager fm: FileManager, logger: Logger) async throws {
-		if fm.fileExists(atPath: localPath.string), try checkShasum(path: localPath) {
+	func ensureDownloaded() async throws {
+		if Config.fm.fileExists(atPath: localPath.string), try checkShasum(path: localPath) {
 			/* File exists and already has correct checksum (or checksum is not checked) */
-			logger.info("Reusing downloaded tarball at path \(localPath)")
+			Config.logger.info("Reusing downloaded tarball at path \(localPath)")
 		} else {
-			logger.info("Downloading tarball from \(url)")
+			Config.logger.info("Downloading tarball from \(url)")
 			let (tmpFileURL, urlResponse) = try await URLSession.shared.download(from: url, delegate: nil)
 			guard let httpURLResponse = urlResponse as? HTTPURLResponse, 200..<300 ~= httpURLResponse.statusCode else {
 				struct InvalidURLResponse : Error {var response: URLResponse}
@@ -72,19 +72,19 @@ struct Tarball {
 				struct InvalidChecksumForDownloadedTarball : Error {}
 				throw InvalidChecksumForDownloadedTarball()
 			}
-			try fm.ensureFileDeleted(path: localPath)
-			try fm.moveItem(at: tmpFileURL, to: localPath.url)
-			logger.info("Tarball downloaded")
+			try Config.fm.ensureFileDeleted(path: localPath)
+			try Config.fm.moveItem(at: tmpFileURL, to: localPath.url)
+			Config.logger.info("Tarball downloaded")
 		}
 	}
 	
-	func extract(in folder: FilePath, fileManager fm: FileManager, logger: Logger) throws -> FilePath {
-		try fm.ensureDirectory(path: folder)
-		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/tar", args: ["xf", localPath.string, "-C", folder.string], outputHandler: Process.logProcessOutputFactory(logger: logger))
+	func extract(in folder: FilePath) throws -> FilePath {
+		try Config.fm.ensureDirectory(path: folder)
+		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/tar", args: ["xf", localPath.string, "-C", folder.string], outputHandler: Process.logProcessOutputFactory())
 		
 		var isDir = ObjCBool(false)
 		let extractedTarballDir = folder.appending(stem)
-		guard fm.fileExists(atPath: extractedTarballDir.string, isDirectory: &isDir), isDir.boolValue else {
+		guard Config.fm.fileExists(atPath: extractedTarballDir.string, isDirectory: &isDir), isDir.boolValue else {
 			struct ExtractedTarballNotFound : Error {var expectedPath: FilePath}
 			throw ExtractedTarballNotFound(expectedPath: extractedTarballDir)
 		}

@@ -10,15 +10,16 @@ import XcodeTools
 
 public typealias FileDescriptor = System.FileDescriptor
 
+@available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
 extension Process {
 	
-	public static func logProcessOutputFactory(logger: Logger, logLevel: Logger.Level = .debug) -> (String, SystemPackage.FileDescriptor) -> Void {
+	public static func logProcessOutputFactory(logLevel: Logger.Level = .debug) -> (String, SystemPackage.FileDescriptor) -> Void {
 		return { line, fd in
 			let trimmedLine = line.trimmingCharacters(in: .newlines)
 			switch fd {
-				case .standardOutput: logger.log(level: logLevel, "stdout: \(trimmedLine)")
-				case .standardError:  logger.log(level: logLevel, "stderr: \(trimmedLine)")
-				default:              logger.log(level: logLevel, "unknown fd: \(trimmedLine)")
+				case .standardOutput: Config.logger.log(level: logLevel, "stdout: \(trimmedLine)")
+				case .standardError:  Config.logger.log(level: logLevel, "stderr: \(trimmedLine)")
+				default:              Config.logger.log(level: logLevel, "unknown fd: \(trimmedLine)")
 			}
 		}
 	}

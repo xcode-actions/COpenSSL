@@ -34,56 +34,56 @@ struct BuiltTarget {
 	}
 	
 	/** Returns an absolute FilePath */
-	func buildDylibFromStaticLibs(opensslVersion: String, buildPaths: BuildPaths, skipExistingArtifacts: Bool, fileManager fm: FileManager, logger: Logger) throws -> FilePath {
-		try buildLibObjects(buildPaths: buildPaths, skipExistingArtifacts: skipExistingArtifacts, fileManager: fm, logger: logger)
-		return try buildDylib(opensslVersion: opensslVersion, buildPaths: buildPaths, skipExistingArtifacts: skipExistingArtifacts, fileManager: fm, logger: logger)
+	func buildDylibFromStaticLibs(opensslVersion: String, buildPaths: BuildPaths, skipExistingArtifacts: Bool) throws -> FilePath {
+		try buildLibObjects(buildPaths: buildPaths, skipExistingArtifacts: skipExistingArtifacts)
+		return try buildDylib(opensslVersion: opensslVersion, buildPaths: buildPaths, skipExistingArtifacts: skipExistingArtifacts)
 	}
 	
-	private func buildLibObjects(buildPaths: BuildPaths, skipExistingArtifacts: Bool, fileManager fm: FileManager, logger: Logger) throws {
+	private func buildLibObjects(buildPaths: BuildPaths, skipExistingArtifacts: Bool) throws {
 		/* Let’s extract the static libraries’ objects in a folder. We’ll use this
 		 * to build the dynamic libraries. */
 		let destinationDir = buildPaths.libObjectsDir(for: target)
-		guard !skipExistingArtifacts || !fm.fileExists(atPath: destinationDir.string) else {
-			logger.info("Skipping static lib extract for target \(target) because \(destinationDir) already exists")
+		guard !skipExistingArtifacts || !Config.fm.fileExists(atPath: destinationDir.string) else {
+			Config.logger.info("Skipping static lib extract for target \(target) because \(destinationDir) already exists")
 			return
 		}
-		try fm.ensureDirectoryDeleted(path: destinationDir)
-		try fm.ensureDirectory(path: destinationDir)
+		try Config.fm.ensureDirectoryDeleted(path: destinationDir)
+		try Config.fm.ensureDirectory(path: destinationDir)
 		
 		/* Apparently we *have to* change the CWD (though we should do it through
 		 * Process which has an API for that). */
-		let previousCwd = fm.currentDirectoryPath
-		fm.changeCurrentDirectoryPath(destinationDir.string)
-		defer {fm.changeCurrentDirectoryPath(previousCwd)}
+		let previousCwd = Config.fm.currentDirectoryPath
+		Config.fm.changeCurrentDirectoryPath(destinationDir.string)
+		defer {Config.fm.changeCurrentDirectoryPath(previousCwd)}
 		
 		for staticLibPath in absoluteStaticLibrariesPaths {
-			logger.info("Extracting \(staticLibPath) to \(destinationDir)")
+			Config.logger.info("Extracting \(staticLibPath) to \(destinationDir)")
 			try Process.spawnAndStreamEnsuringSuccess(
 				"/usr/bin/xcrun",
 				args: ["ar", "-x", staticLibPath.string],
-				outputHandler: Process.logProcessOutputFactory(logger: logger)
+				outputHandler: Process.logProcessOutputFactory()
 			)
 		}
 	}
 	
-	private func buildDylib(opensslVersion: String, buildPaths: BuildPaths, skipExistingArtifacts: Bool, fileManager fm: FileManager, logger: Logger) throws -> FilePath {
+	private func buildDylib(opensslVersion: String, buildPaths: BuildPaths, skipExistingArtifacts: Bool) throws -> FilePath {
 		/* Now we build the dynamic libraries. We’ll use those to get FAT dynamic
 		 * libraries later. */
 		let destination = buildPaths.dylibsDir(for: target).appending("libOpenSSL.dylib")
-		guard !skipExistingArtifacts || !fm.fileExists(atPath: destination.string) else {
-			logger.info("Skipping dynamic lib creation for target \(target) because \(destination) already exists")
+		guard !skipExistingArtifacts || !Config.fm.fileExists(atPath: destination.string) else {
+			Config.logger.info("Skipping dynamic lib creation for target \(target) because \(destination) already exists")
 			return destination
 		}
-		try fm.ensureDirectoryDeleted(path: destination.removingLastComponent())
-		try fm.ensureDirectory(path: destination.removingLastComponent())
+		try Config.fm.ensureDirectoryDeleted(path: destination.removingLastComponent())
+		try Config.fm.ensureDirectory(path: destination.removingLastComponent())
 		
-		let hasBitcode = try checkForBitcode(absoluteStaticLibrariesPaths, logger: logger)
-		let (sdk, minSdk) = try getSdkVersions(absoluteStaticLibrariesPaths, logger: logger)
-		logger.debug("got sdk \(sdk), min sdk \(minSdk)", metadata: ["target": "\(target)"])
+		let hasBitcode = try checkForBitcode(absoluteStaticLibrariesPaths)
+		let (sdk, minSdk) = try getSdkVersions(absoluteStaticLibrariesPaths)
+		Config.logger.debug("got sdk \(sdk), min sdk \(minSdk)", metadata: ["target": "\(target)"])
 		
 		let objectDir = buildPaths.libObjectsDir(for: target)
-		let objectFiles = try fm.contentsOfDirectory(atPath: objectDir.string).filter{ $0.hasSuffix(".o") }.map{ objectDir.appending($0) }
-		logger.info("Creating dylib at \(destination) from objects in \(objectDir)")
+		let objectFiles = try Config.fm.contentsOfDirectory(atPath: objectDir.string).filter{ $0.hasSuffix(".o") }.map{ objectDir.appending($0) }
+		Config.logger.info("Creating dylib at \(destination) from objects in \(objectDir)")
 		try Process.spawnAndStreamEnsuringSuccess(
 			"/usr/bin/xcrun",
 			args: ["ld"] + objectFiles.map{ $0.string } + (hasBitcode ? ["-bitcode_bundle"] : []) + [
@@ -96,7 +96,7 @@ struct BuiltTarget {
 				"-current_version", normalizedOpenSSLVersion(opensslVersion),
 				"-o", destination.string
 			],
-			outputHandler: Process.logProcessOutputFactory(logger: logger)
+			outputHandler: Process.logProcessOutputFactory()
 		)
 		#warning("Remember to do this when we create the dynamic framework")
 //		logger.info("Updating install name of dylib at \(destination.path)")
@@ -128,7 +128,7 @@ struct BuiltTarget {
 	 *       cmdsize 16
 	 *       version 4.0                     <-- minimum SDK
 	 *           sdk 6.1                     <-- target SDK */
-	private func getSdkVersions(_ libs: [FilePath], logger: Logger) throws -> (sdk: String, minSdk: String) {
+	private func getSdkVersions(_ libs: [FilePath]) throws -> (sdk: String, minSdk: String) {
 		var sdk: String?
 		var minSdk: String?
 		for lib in libs {
@@ -151,7 +151,7 @@ struct BuiltTarget {
 								if minSdk == nil {minSdk = lastWord}
 								else {
 									guard minSdk == lastWord else {
-										logger.error("found min sdk \(lastWord) but current min sdk is \(minSdk ?? "<nil>")")
+										Config.logger.error("found min sdk \(lastWord) but current min sdk is \(minSdk ?? "<nil>")")
 										struct MultipleMinSdkVersionFound : Error {var libs: [FilePath]}
 										error = MultipleMinSdkVersionFound(libs: libs)
 										return
@@ -164,7 +164,7 @@ struct BuiltTarget {
 								if sdk == nil {sdk = lastWord}
 								else {
 									guard sdk == lastWord else {
-										logger.error("found sdk \(lastWord) but current sdk is \(sdk ?? "<nil>")")
+										Config.logger.error("found sdk \(lastWord) but current sdk is \(sdk ?? "<nil>")")
 										struct MultipleSdkVersionFound : Error {var libs: [FilePath]}
 										error = MultipleSdkVersionFound(libs: libs)
 										return
@@ -174,8 +174,8 @@ struct BuiltTarget {
 							default: (/*nop: we simply ignore the line*/)
 						}
 						
-					case .standardError: logger.debug("otool trimmed stderr: \(trimmedLine)")
-					default:             logger.debug("otool trimmed unknown fd: \(trimmedLine)")
+					case .standardError: Config.logger.debug("otool trimmed stderr: \(trimmedLine)")
+					default:             Config.logger.debug("otool trimmed unknown fd: \(trimmedLine)")
 				}
 			}
 			try Process.spawnAndStreamEnsuringSuccess(
@@ -208,7 +208,7 @@ struct BuiltTarget {
 	 
 	 which is apparently [the Apple-recommended method](https://forums.developer.apple.com/message/7038)
 	 (link is dead, it’s from [this stackoverflow comment](https://stackoverflow.com/questions/32808642#comment64079201_33615568)). */
-	private func checkForBitcode(_ libs: [FilePath], logger: Logger) throws -> Bool {
+	private func checkForBitcode(_ libs: [FilePath]) throws -> Bool {
 		var foundLLVM = false
 		var foundBitcode = false
 		for lib in libs {
@@ -223,8 +223,8 @@ struct BuiltTarget {
 						foundBitcode   = foundBitcode   || trimmedLine.contains("__bitcode")
 						foundLLVM      = foundLLVM      || localFoundLLVM
 						
-					case .standardError: logger.debug("otool trimmed stderr: \(trimmedLine)")
-					default:             logger.debug("otool trimmed unknown fd: \(trimmedLine)")
+					case .standardError: Config.logger.debug("otool trimmed stderr: \(trimmedLine)")
+					default:             Config.logger.debug("otool trimmed unknown fd: \(trimmedLine)")
 				}
 			}
 			try Process.spawnAndStreamEnsuringSuccess(
@@ -233,7 +233,7 @@ struct BuiltTarget {
 				outputHandler: outputHandler
 			)
 			if localFoundLLVM && !foundBitcode {
-				logger.warning("__LLVM found in \(lib.string), but __bitcode was not (of lib is dynamic this is expected though)")
+				Config.logger.warning("__LLVM found in \(lib.string), but __bitcode was not (of lib is dynamic this is expected though)")
 			}
 			if foundBitcode {
 				break
