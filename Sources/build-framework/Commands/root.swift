@@ -182,22 +182,10 @@ struct BuildFramework : ParsableCommand {
 			}
 			
 			/* Create merged FAT static lib */
-//			mergeFatStatic: do {
-//				let dest = URL(fileURLWithPath: mergedFatStaticDirectory, isDirectory: true).appendingPathComponent("\(platformAndSdk)").appendingPathComponent("libOpenSSL.a")
-//				guard !skipExistingArtifacts || !fm.fileExists(atPath: dest.path) else {
-//					logger.info("Skipping creation of \(dest.path) because it already exists")
-//					break mergeFatStatic
-//				}
-//				try fm.ensureDirectory(path: dest.deletingLastPathComponent().path)
-//				try fm.ensureFileDeleted(path: dest.path)
-			
-//				logger.info("Merging \(libs.count) lib(s) to \(dest.path)")
-//				try Process.spawnAndStreamEnsuringSuccess(
-//					"/usr/bin/xcrun",
-//					args: ["libtool", "-static", "-o", dest.path] + libs.map{ URL(fileURLWithPath: fatStaticDirectory, isDirectory: true).appendingPathComponent("\(platformAndSdk)").appendingPathComponent($0).path },
-//					outputHandler: Process.logProcessOutputFactory(logger: logger)
-//				)
-//			}
+			do {
+				let unbuiltMergedStaticLib = UnbuiltMergedStaticLib(libs: builtTarget.staticLibraries.map{ buildPaths.fatStaticDir.appending(platformAndSdk.pathComponent).pushing($0) }, skipExistingArtifacts: skipExistingArtifacts)
+				try unbuiltMergedStaticLib.buildMergedLib(at: buildPaths.mergedFatStaticLibsDir.appending(platformAndSdk.pathComponent).appending("libOpenSSL.a"))
+			}
 			
 			/* Create FAT dylib from the dylibs generated earlier */
 			do {
