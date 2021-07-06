@@ -176,21 +176,28 @@ struct BuildFramework : ParsableCommand {
 			}
 			
 			/* Create FAT static libs, one per lib */
+			var fatStaticLibs = [FilePath]()
 			for lib in builtTarget.staticLibraries {
 				let unbuiltFATLib = UnbuiltFATLib(libs: targets.map{ buildPaths.installDir(for: $0).pushing(lib) }, skipExistingArtifacts: skipExistingArtifacts)
-				try unbuiltFATLib.buildFATLib(at: buildPaths.fatStaticDir.appending(platformAndSdk.pathComponent).pushing(lib))
+				let dest = buildPaths.fatStaticDir.appending(platformAndSdk.pathComponent).pushing(lib)
+				try unbuiltFATLib.buildFATLib(at: dest)
+				fatStaticLibs.append(dest)
 			}
 			
 			/* Create merged FAT static lib */
+			let fatStaticLib: FilePath
 			do {
-				let unbuiltMergedStaticLib = UnbuiltMergedStaticLib(libs: builtTarget.staticLibraries.map{ buildPaths.fatStaticDir.appending(platformAndSdk.pathComponent).pushing($0) }, skipExistingArtifacts: skipExistingArtifacts)
-				try unbuiltMergedStaticLib.buildMergedLib(at: buildPaths.mergedFatStaticLibsDir.appending(platformAndSdk.pathComponent).appending("libOpenSSL.a"))
+				let unbuiltMergedStaticLib = UnbuiltMergedStaticLib(libs: fatStaticLibs, skipExistingArtifacts: skipExistingArtifacts)
+				fatStaticLib = buildPaths.mergedFatStaticLibsDir.appending(platformAndSdk.pathComponent).appending("libOpenSSL.a")
+				try unbuiltMergedStaticLib.buildMergedLib(at: fatStaticLib)
 			}
 			
 			/* Create FAT dylib from the dylibs generated earlier */
+			let fatDynamicLib: FilePath
 			do {
 				let unbuiltFATLib = UnbuiltFATLib(libs: targets.map{ buildPaths.dylibsDir(for: $0).pushing("libOpenSSL.dylib") }, skipExistingArtifacts: skipExistingArtifacts)
-				try unbuiltFATLib.buildFATLib(at: buildPaths.mergedFatDynamicLibsDir.appending(platformAndSdk.pathComponent).pushing("libOpenSSL.dylib"))
+				fatDynamicLib = buildPaths.mergedFatDynamicLibsDir.appending(platformAndSdk.pathComponent).pushing("libOpenSSL.dylib")
+				try unbuiltFATLib.buildFATLib(at: fatDynamicLib)
 			}
 			
 			/* Create the framework from the dylib, headers, and other templates. */
