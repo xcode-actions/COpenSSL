@@ -63,7 +63,7 @@ struct UnbuiltTarget {
 			struct InternalError : Error {}
 			throw InternalError()
 		}
-		setenv("CROSS_COMPILE",              buildPaths.developerDir.appending("Toolchains/XcodeDefault.xctoolchain/usr/bin/").string, 1)
+		setenv("CROSS_COMPILE",              buildPaths.developerDir.appending("Toolchains/XcodeDefault.xctoolchain/usr/bin").string + "/", 1)
 		setenv("OPENSSLBUILD_SDKs_LOCATION", buildPaths.developerDir.appending("Platforms").appending(platformPathComponent).appending("Developer").string, 1)
 		setenv("OPENSSLBUILD_SDK",           sdkPathComponent.string, 1)
 		setenv("OPENSSL_LOCAL_CONFIG_DIR",   opensslConfigDir.string, 1)
@@ -84,7 +84,7 @@ struct UnbuiltTarget {
 			"no-shared",
 			"no-tests"
 		] + (target.arch.hasSuffix("64") ? ["enable-ec_nistp_64_gcc_128"] : [])
-		try Process.spawnAndStreamEnsuringSuccess(sourceDir.appending("Configure").string, args: configArgs, outputHandler: Process.logProcessOutputFactory(logger: logger))
+		try Process.spawnAndStreamEnsuringSuccess(extractedTarballDir.appending("Configure").string, args: configArgs, outputHandler: Process.logProcessOutputFactory(logger: logger))
 		
 		/* *** Build *** */
 		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/xcrun", args: ["make"] + multicoreMakeOption, outputHandler: Process.logProcessOutputFactory(logger: logger))
