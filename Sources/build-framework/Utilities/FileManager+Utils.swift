@@ -1,6 +1,5 @@
 import Foundation
-
-import SystemPackage
+import System
 
 
 
@@ -52,12 +51,10 @@ extension FileManager {
 		}
 		
 		for nextObject in enumerator {
-			guard let url = nextObject as? URL else {
+			guard let url = nextObject as? URL, let path = FilePath(url) else {
 				struct EnumeratorReturnedInvalidObject : Error {var enumeratedPath: FilePath; var returnedObject: Any}
 				throw EnumeratorReturnedInvalidObject(enumeratedPath: folder, returnedObject: nextObject)
 			}
-			assert(url.isFileURL)
-			let path = FilePath(url.path)
 			let fullPath = folder.pushing(path).lexicallyNormalized()
 			var relativePath = fullPath
 			guard relativePath.removePrefix(folder) else {

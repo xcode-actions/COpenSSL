@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
 	name: "COpenSSL",
 	platforms: [
-		.macOS(.v11) /* Technically .v12 */
+		.macOS(.v11) /* Actually .v12 */
 	],
 	products: [
 		.executable(name: "build-openssl-framework", targets: ["build-framework"])

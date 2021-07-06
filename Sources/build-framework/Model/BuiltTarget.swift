@@ -1,9 +1,12 @@
 import Foundation
+import System
 
 import Logging
 import SystemPackage
 
 
+
+typealias FilePath = System.FilePath
 
 @available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
 struct BuiltTarget {
@@ -131,7 +134,7 @@ struct BuiltTarget {
 		for lib in libs {
 			var error: Error?
 			var lastCommand: String?
-			let outputHandler: (String, FileDescriptor) -> Void = { line, fd in
+			let outputHandler: (String, SystemPackage.FileDescriptor) -> Void = { line, fd in
 				guard error == nil else {return}
 				
 				let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -210,7 +213,7 @@ struct BuiltTarget {
 		var foundBitcode = false
 		for lib in libs {
 			var localFoundLLVM = false
-			let outputHandler: (String, FileDescriptor) -> Void = { line, fd in
+			let outputHandler: (String, SystemPackage.FileDescriptor) -> Void = { line, fd in
 				guard !foundBitcode else {return}
 				
 				let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)

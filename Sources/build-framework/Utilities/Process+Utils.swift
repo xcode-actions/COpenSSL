@@ -1,4 +1,5 @@
 import Foundation
+import System
 
 import Logging
 import SignalHandling
@@ -7,9 +8,11 @@ import XcodeTools
 
 
 
+public typealias FileDescriptor = System.FileDescriptor
+
 extension Process {
 	
-	public static func logProcessOutputFactory(logger: Logger, logLevel: Logger.Level = .debug) -> (String, FileDescriptor) -> Void {
+	public static func logProcessOutputFactory(logger: Logger, logLevel: Logger.Level = .debug) -> (String, SystemPackage.FileDescriptor) -> Void {
 		return { line, fd in
 			let trimmedLine = line.trimmingCharacters(in: .newlines)
 			switch fd {
@@ -22,13 +25,13 @@ extension Process {
 	
 	public static func spawnAndStreamEnsuringSuccess(
 		_ executable: String, args: [String] = [],
-		stdin: FileDescriptor? = FileDescriptor.standardInput,
-		stdoutRedirect: RedirectMode = RedirectMode.capture,
-		stderrRedirect: RedirectMode = RedirectMode.capture,
-		fileDescriptorsToSend: [FileDescriptor /* Value in parent */: FileDescriptor /* Value in child */] = [:],
-		additionalOutputFileDescriptors: Set<FileDescriptor> = [],
+		stdin: SystemPackage.FileDescriptor? = .standardInput,
+		stdoutRedirect: RedirectMode = .capture,
+		stderrRedirect: RedirectMode = .capture,
+		fileDescriptorsToSend: [SystemPackage.FileDescriptor /* Value in parent */: SystemPackage.FileDescriptor /* Value in child */] = [:],
+		additionalOutputFileDescriptors: Set<SystemPackage.FileDescriptor> = [],
 		signalsToForward: Set<Signal> = Signal.toForwardToSubprocesses,
-		outputHandler: @escaping (_ line: String, _ sourceFd: FileDescriptor) -> Void
+		outputHandler: @escaping (_ line: String, _ sourceFd: SystemPackage.FileDescriptor) -> Void
 	) throws {
 		let (terminationStatus, terminationReason) = try spawnAndStream(
 			executable, args: args,
@@ -45,11 +48,11 @@ extension Process {
 	
 	public static func spawnAndGetOutput(
 		_ executable: String, args: [String] = [],
-		stdin: FileDescriptor? = FileDescriptor.standardInput,
+		stdin: SystemPackage.FileDescriptor? = .standardInput,
 		signalsToForward: Set<Signal> = Signal.toForwardToSubprocesses
 	) throws -> String {
 		var stdout = ""
-		let outputHandler: (String, FileDescriptor) -> Void = { line, fd in
+		let outputHandler: (String, SystemPackage.FileDescriptor) -> Void = { line, fd in
 			assert(fd == .standardOutput)
 			stdout += line
 		}
