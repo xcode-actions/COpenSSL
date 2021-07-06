@@ -188,28 +188,24 @@ struct BuildFramework : ParsableCommand {
 			let fatStaticLib: FilePath
 			do {
 				let unbuiltMergedStaticLib = UnbuiltMergedStaticLib(libs: fatStaticLibs, skipExistingArtifacts: skipExistingArtifacts)
-				fatStaticLib = buildPaths.mergedFatStaticLibsDir.appending(platformAndSdk.pathComponent).appending("libOpenSSL.a")
+				fatStaticLib = buildPaths.mergedFatStaticLibsDir.appending(platformAndSdk.pathComponent).appending(buildPaths.staticLibProductNameComponent)
 				try unbuiltMergedStaticLib.buildMergedLib(at: fatStaticLib)
 			}
 			
 			/* Create FAT dylib from the dylibs generated earlier */
 			let fatDynamicLib: FilePath
 			do {
-				let unbuiltFATLib = UnbuiltFATLib(libs: targets.map{ buildPaths.dylibsDir(for: $0).pushing("libOpenSSL.dylib") }, skipExistingArtifacts: skipExistingArtifacts)
-				fatDynamicLib = buildPaths.mergedFatDynamicLibsDir.appending(platformAndSdk.pathComponent).pushing("libOpenSSL.dylib")
+				let unbuiltFATLib = UnbuiltFATLib(libs: targets.map{ buildPaths.dylibsDir(for: $0).appending(buildPaths.dylibProductNameComponent) }, skipExistingArtifacts: skipExistingArtifacts)
+				fatDynamicLib = buildPaths.mergedFatDynamicLibsDir.appending(platformAndSdk.pathComponent).appending(buildPaths.dylibProductNameComponent)
 				try unbuiltFATLib.buildFATLib(at: fatDynamicLib)
 			}
 			
 			/* Create the framework from the dylib, headers, and other templates. */
-//			framework: do {
-//				let dest = URL(fileURLWithPath: finalFrameworksDirectory, isDirectory: true).appendingPathComponent("\(platformAndSdk)").appendingPathComponent("OpenSSL.framework")
-//				guard !skipExistingArtifacts || !fm.fileExists(atPath: dest.path) else {
-//					logger.info("Skipping creation of \(dest.path) because it already exists")
-//					break framework
-//				}
-//				try fm.ensureDirectoryDeleted(path: dest.path)
-//				try fm.ensureDirectory(path: dest.path)
-//			}
+			let frameworkPath: FilePath
+			do {
+				let unbuiltFramework = UnbuiltFramework(libPath: fatDynamicLib, headers: builtTarget.headers, modules: [], resources: [], skipExistingArtifacts: skipExistingArtifacts)
+				frameworkPath = buildPaths.finalFrameworksDir.appending(platformAndSdk.pathComponent).appending(buildPaths.frameworkProductNameComponent)
+			}
 		}
 	}
 	

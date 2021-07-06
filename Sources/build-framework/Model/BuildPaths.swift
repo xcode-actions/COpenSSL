@@ -11,6 +11,9 @@ struct BuildPaths {
 	
 	/** Not really a path, but hella convenient to have here */
 	let productName: String
+	let dylibProductNameComponent: FilePath.Component
+	let staticLibProductNameComponent: FilePath.Component
+	let frameworkProductNameComponent: FilePath.Component
 	
 	let resultXCFrameworkStatic: FilePath
 	let resultXCFrameworkDynamic: FilePath
@@ -76,14 +79,20 @@ struct BuildPaths {
 		let productNameValid = (productName.first(where: { !$0.isASCII || (!$0.isLetter && !$0.isNumber && $0 != "_") }) == nil)
 		guard
 			productNameValid,
-			let  staticXCFrameworkComponent = FilePath.Component(productName +  "-static.xcframework"),  staticXCFrameworkComponent.kind == .regular,
-			let dynamicXCFrameworkComponent = FilePath.Component(productName + "-dynamic.xcframework"), dynamicXCFrameworkComponent.kind == .regular
+			let dylibProductNameComponent     = FilePath.Component("lib" + productName +         ".dylib"),           dylibProductNameComponent.kind == .regular,
+			let staticLibProductNameComponent = FilePath.Component("lib" + productName +         ".a"),           staticLibProductNameComponent.kind == .regular,
+			let frameworkProductNameComponent = FilePath.Component(        productName +         ".framework"),   frameworkProductNameComponent.kind == .regular,
+			let staticXCFrameworkComponent    = FilePath.Component(        productName +  "-static.xcframework"),    staticXCFrameworkComponent.kind == .regular,
+			let dynamicXCFrameworkComponent   = FilePath.Component(        productName + "-dynamic.xcframework"),   dynamicXCFrameworkComponent.kind == .regular
 		else {
 			struct InvalidProductName : Error {var productName: String}
 			throw InvalidProductName(productName: productName)
 		}
 		
 		self.productName = productName
+		self.dylibProductNameComponent = dylibProductNameComponent
+		self.staticLibProductNameComponent = staticLibProductNameComponent
+		self.frameworkProductNameComponent = frameworkProductNameComponent
 		self.resultXCFrameworkStatic  = self.resultDir.appending(staticXCFrameworkComponent)
 		self.resultXCFrameworkDynamic = self.resultDir.appending(dynamicXCFrameworkComponent)
 		
