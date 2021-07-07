@@ -205,7 +205,7 @@ struct BuildFramework : ParsableCommand {
 			do {
 				let unbuiltFramework = UnbuiltFramework(libPath: fatDynamicLib, headers: builtTarget.headers, modules: [], resources: [], skipExistingArtifacts: skipExistingArtifacts)
 				frameworkPath = buildPaths.finalFrameworksDir.appending(platformAndSdk.pathComponent).appending(buildPaths.frameworkProductNameComponent)
-				// TODO
+				try unbuiltFramework.buildFramework(at: frameworkPath)
 			}
 		}
 	}
