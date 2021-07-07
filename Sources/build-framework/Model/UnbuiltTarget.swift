@@ -8,17 +8,17 @@ import Logging
 @available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
 struct UnbuiltTarget {
 	
-	let target: Target
-	let tarball: Tarball
-	let buildPaths: BuildPaths
+	var target: Target
+	var tarball: Tarball
+	var buildPaths: BuildPaths
 	
-	let sdkVersion: String?
-	let minSDKVersion: String?
-	let opensslVersion: String
+	var sdkVersion: String?
+	var minSDKVersion: String?
+	var opensslVersion: String
 	
-	let disableBitcode: Bool
+	var disableBitcode: Bool
 	
-	let skipExistingArtifacts: Bool
+	var skipExistingArtifacts: Bool
 	
 	func buildTarget() throws -> BuiltTarget {
 		let sourceDir = buildPaths.sourceDir(for: target)

@@ -12,10 +12,10 @@ struct Tarball {
 	
 	let url: URL
 	
-	let version: String
-	let localPath: FilePath
+	var version: String
+	var localPath: FilePath
 	
-	let expectedShasum: String?
+	var expectedShasum: String?
 	
 	/** The name of the tarball without the extensions. Usually the name of the
 	 folder inside the tarball. */
@@ -46,7 +46,7 @@ struct Tarball {
 		while !(component.extension?.contains(where: { $0.isNumber }) ?? false), let newComponent = FilePath.Component(component.stem), newComponent != component {
 			component = newComponent
 		}
-		stem = component.string
+		self.stem = component.string
 	}
 	
 	/* TODO: At some point in the future, the Logger will probably be retrievable
