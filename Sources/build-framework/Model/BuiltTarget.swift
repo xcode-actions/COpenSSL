@@ -69,7 +69,7 @@ struct BuiltTarget {
 	private func buildDylib(opensslVersion: String, buildPaths: BuildPaths, skipExistingArtifacts: Bool) throws -> FilePath {
 		/* Now we build the dynamic libraries. We’ll use those to get FAT dynamic
 		 * libraries later. */
-		let destination = buildPaths.dylibsDir(for: target).appending("libOpenSSL.dylib")
+		let destination = buildPaths.dylibsDir(for: target).appending(buildPaths.dylibProductNameComponent)
 		guard !skipExistingArtifacts || !Config.fm.fileExists(atPath: destination.string) else {
 			Config.logger.info("Skipping dynamic lib creation for target \(target) because \(destination) already exists")
 			return destination
