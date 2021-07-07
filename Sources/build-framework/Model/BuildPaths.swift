@@ -180,7 +180,9 @@ struct BuildPaths {
 						struct ConfigDirNotFoundForVersion : Error {var version: String}
 						throw ConfigDirNotFoundForVersion(version: version)
 					}
-				} else if let ext = component.extension, ext.lastIndex(where: { $0.isLetter }) == ext.index(before: ext.endIndex) {
+				} else if let ext = component.extension, ext.last?.isLetter ?? false {
+					/* The current version has an “extension” whose last character is
+					 * a letter (e.g. “1.1.1k”). We drop the letter and try again. */
 					currentVersion = String(currentVersion.dropLast())
 				} else {
 					/* The current version has an “extension” that does not contain a
