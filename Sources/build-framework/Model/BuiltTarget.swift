@@ -98,13 +98,6 @@ struct BuiltTarget {
 			],
 			outputHandler: Process.logProcessOutputFactory()
 		)
-		#warning("Remember to do this when we create the dynamic framework")
-//		logger.info("Updating install name of dylib at \(destination.path)")
-//		try Process.spawnAndStreamEnsuringSuccess(
-//			"/usr/bin/xcrun",
-//			args: ["install_name_tool", "-id", "@rpath/OpenSSL.framework/OpenSSL", destination.path],
-//			outputHandler: Process.logProcessOutputFactory(logger: logger)
-//		)
 		return destination
 	}
 	

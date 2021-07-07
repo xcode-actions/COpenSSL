@@ -140,7 +140,7 @@ struct UnbuiltTarget {
 	
 	private static var numberOfCores: Int? = {
 		guard MemoryLayout<Int32>.size <= MemoryLayout<Int>.size else {
-//			logger.notice("Int32 is bigger than Int (\(MemoryLayout<Int32>.size) > \(MemoryLayout<Int>.size)). Cannot return the number of cores.")
+			Config.logger.notice("Int32 is bigger than Int (\(MemoryLayout<Int32>.size) > \(MemoryLayout<Int>.size)). Cannot return the number of cores.")
 			return nil
 		}
 		

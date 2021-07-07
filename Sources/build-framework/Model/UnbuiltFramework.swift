@@ -64,11 +64,22 @@ struct UnbuiltFramework {
 		let modulesPath = workDir.appending(modulesPathComponent)
 		let resourcesPath = workDir.appending(resourcesPathComponent)
 		let infoplistPath = workDir.appending(infoplistPathComponents)
+		let installedLibPath = workDir.appending(binaryPathComponent)
 		
 		/* Create folders if needed */
 		if !headers.isEmpty {try Config.fm.ensureDirectory(path: headersPath)}
 		if !modules.isEmpty {try Config.fm.ensureDirectory(path: modulesPath)}
 		if !resources.isEmpty || version != nil {try Config.fm.ensureDirectory(path: resourcesPath)}
+		
+		/* Copy the binary */
+		try Config.fm.copyItem(at: libPath.url, to: installedLibPath.url)
+		/* Renaming the lib */
+		Config.logger.info("Updating install name of dylib at \(installedLibPath)")
+		try Process.spawnAndStreamEnsuringSuccess(
+			"/usr/bin/xcrun",
+			args: ["install_name_tool", "-id", "@rpath/\(frameworkPathComponent.string)/\(binaryPathComponent.string)", installedLibPath.string],
+			outputHandler: Process.logProcessOutputFactory()
+		)
 	}
 	
 }
