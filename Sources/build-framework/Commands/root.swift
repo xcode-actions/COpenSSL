@@ -203,7 +203,8 @@ struct BuildFramework : ParsableCommand {
 			/* Create the framework from the dylib, headers, and other templates. */
 			let frameworkPath: FilePath
 			do {
-				let unbuiltFramework = UnbuiltFramework(libPath: fatDynamicLib, headers: builtTarget.headers, modules: [], resources: [], skipExistingArtifacts: skipExistingArtifacts)
+				let version = (platformAndSdk.platform == "macOS" ? "A" : nil)
+				let unbuiltFramework = UnbuiltFramework(version: version, libPath: fatDynamicLib, headers: builtTarget.headers, modules: [], resources: [], skipExistingArtifacts: skipExistingArtifacts)
 				frameworkPath = buildPaths.finalFrameworksDir.appending(platformAndSdk.pathComponent).appending(buildPaths.frameworkProductNameComponent)
 				try unbuiltFramework.buildFramework(at: frameworkPath)
 			}
