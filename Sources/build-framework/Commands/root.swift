@@ -204,7 +204,7 @@ struct BuildFramework : ParsableCommand {
 			let frameworkPath: FilePath
 			do {
 				let version = (platformAndSdk.platform == "macOS" ? "A" : nil)
-				let unbuiltFramework = UnbuiltFramework(version: version, libPath: fatDynamicLib, headers: builtTarget.headers, modules: [], resources: [], skipExistingArtifacts: skipExistingArtifacts)
+				let unbuiltFramework = UnbuiltFramework(version: version, libPath: fatDynamicLib, headers: builtTarget.headers, modules: [], resources: [], pathsRoot: builtTarget.installFolder, skipExistingArtifacts: skipExistingArtifacts)
 				frameworkPath = buildPaths.finalFrameworksDir.appending(platformAndSdk.pathComponent).appending(buildPaths.frameworkProductNameComponent)
 				try unbuiltFramework.buildFramework(at: frameworkPath)
 			}

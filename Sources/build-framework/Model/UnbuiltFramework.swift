@@ -15,6 +15,8 @@ struct UnbuiltFramework {
 	/** The framework resources, except for the Info.plist */
 	var resources: [FilePath]
 	
+	var pathsRoot: FilePath
+	
 	var skipExistingArtifacts: Bool
 	
 	func buildFramework(at destPath: FilePath) throws {
@@ -72,7 +74,7 @@ struct UnbuiltFramework {
 		if !resources.isEmpty || version != nil {try Config.fm.ensureDirectory(path: resourcesPath)}
 		
 		/* Copy the binary */
-		try Config.fm.copyItem(at: libPath.url, to: installedLibPath.url)
+		try Config.fm.copyItem(at: pathsRoot.pushing(libPath).url, to: installedLibPath.url)
 		/* Renaming the lib */
 		Config.logger.info("Updating install name of dylib at \(installedLibPath)")
 		try Process.spawnAndStreamEnsuringSuccess(
@@ -80,6 +82,25 @@ struct UnbuiltFramework {
 			args: ["install_name_tool", "-id", "@rpath/\(frameworkPathComponent.string)/\(binaryPathComponent.string)", installedLibPath.string],
 			outputHandler: Process.logProcessOutputFactory()
 		)
+		
+		for header in headers {
+			guard header.root == nil else {
+				struct InvalidNonRelativeHeader : Error {var headerPath: FilePath}
+				throw InvalidNonRelativeHeader(headerPath: header)
+			}
+			let headerNoInclude: FilePath
+			if !header.starts(with: "include") {
+				Config.logger.warning("Got header not in the “include” directory, which is unexpected. Copying into the Framework without dropping first path component.")
+				headerNoInclude = header
+			} else {
+				/* The proper way to do this is the commented line below. However,
+				 * it currently crashes (Xcode 13A5155e, macOS 21A5268h) */
+//				headerNoInclude = FilePath(root: nil, header.components.dropFirst())
+				headerNoInclude = FilePath(String(header.string.dropFirst("include/".count)))
+			}
+			try Config.fm.ensureDirectory(path: headersPath.pushing(headerNoInclude).removingLastComponent())
+			try Config.fm.copyItem(at: pathsRoot.pushing(header).url, to: headersPath.pushing(headerNoInclude).url)
+		}
 	}
 	
 }
