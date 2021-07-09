@@ -119,12 +119,15 @@ struct BuildFramework : ParsableCommand {
 		for target in targets {
 			let sdkVersion: String?
 			let minSDKVersion: String?
-			switch target.platform {
-				case   "macOS": (sdkVersion, minSDKVersion) = (  macOSSDKVersion,   macOSMinSDKVersion)
-				case     "iOS": (sdkVersion, minSDKVersion) = (    iOSSDKVersion,     iOSMinSDKVersion)
-				case    "tvOS": (sdkVersion, minSDKVersion) = (   tvOSSDKVersion,    tvOSMinSDKVersion)
-				case "watchOS": (sdkVersion, minSDKVersion) = (watchOSSDKVersion, watchOSMinSDKVersion)
-				default:        (sdkVersion, minSDKVersion) = (nil, nil)
+			switch (target.sdk, target.platform) {
+				case ("iOS", "macOS"): (sdkVersion, minSDKVersion) = (catalystSDKVersion, catalystMinSDKVersion)
+				case ("macOS", _):     (sdkVersion, minSDKVersion) = (   macOSSDKVersion,    macOSMinSDKVersion)
+				case ("iOS", _):       (sdkVersion, minSDKVersion) = (     iOSSDKVersion,      iOSMinSDKVersion)
+				case ("tvOS", _):      (sdkVersion, minSDKVersion) = (    tvOSSDKVersion,     tvOSMinSDKVersion)
+				case ("watchOS", _):   (sdkVersion, minSDKVersion) = ( watchOSSDKVersion,  watchOSMinSDKVersion)
+				default:
+					Config.logger.warning("Unknown target sdk/platform tuple \(target.sdk)/\(target.platform)")
+					(sdkVersion, minSDKVersion) = (nil, nil)
 			}
 			let unbuiltTarget = UnbuiltTarget(target: target, tarball: tarball, buildPaths: buildPaths, sdkVersion: sdkVersion, minSDKVersion: minSDKVersion, opensslVersion: opensslVersion, disableBitcode: disableBitcode, skipExistingArtifacts: skipExistingArtifacts)
 			let builtTarget = try unbuiltTarget.buildTarget()
@@ -203,8 +206,35 @@ struct BuildFramework : ParsableCommand {
 			/* Create the framework from the dylib, headers, and other templates. */
 			let frameworkPath: FilePath
 			do {
-				let version = (platformAndSdk.platform == "macOS" ? "A" : nil)
-				let unbuiltFramework = UnbuiltFramework(version: version, libPath: fatDynamicLib, headers: builtTarget.headers, modules: [], resources: [], pathsRoot: builtTarget.installFolder, skipExistingArtifacts: skipExistingArtifacts)
+				let frameworkVersion = (platformAndSdk.platform == "macOS" ? "A" : nil)
+				/* Some sdk+platform libs might have a more than one min sdk inside
+				 * because they have some archs that are not compatible with the min
+				 * iOS version (e.g. arm64e is only able to target iOS 14.0 at the
+				 * minimum, but arm64 can target lower OSes; if the minimum iOS SDK
+				 * is set to something lower than iOS 14.0, the lib for the iOS-iOS
+				 * tuple will contain more than one minSdk version).
+				 * We decide to give the minimum min sdk (more permissive option)
+				 * instead of the maximum min sdk (more conservative option) as the
+				 * lib should work on iOS < 14.0, even for such cases (the arm64
+				 * slice would be used even on arm64e-capable processor, I think). */
+				let minimumOSVersion = try BuiltTarget.getSdkVersions([fatDynamicLib], multipleSdkVersionsResolution: .returnMin).minSdk
+				let unbuiltFramework = UnbuiltFramework(
+					version: frameworkVersion,
+					info: .init(
+						platform: platformAndSdk.platform,
+						executable: buildPaths.productName,
+						identifier: "me.frizlab." + buildPaths.productName /* TODO */,
+						name: buildPaths.productName,
+						marketingVersion: BuiltTarget.normalizedOpenSSLVersion(opensslVersion),
+						buildVersion: "1",
+						minimumOSVersion: minimumOSVersion
+					),
+					libPath: fatDynamicLib,
+					headers: (root: builtTarget.installFolder, files: builtTarget.headers),
+					modules: nil,
+					resources: nil,
+					skipExistingArtifacts: skipExistingArtifacts
+				)
 				frameworkPath = buildPaths.finalFrameworksDir.appending(platformAndSdk.pathComponent).appending(buildPaths.frameworkProductNameComponent)
 				try unbuiltFramework.buildFramework(at: frameworkPath)
 			}

@@ -6,16 +6,55 @@ import System
 @available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
 struct UnbuiltFramework {
 	
+	struct Info {
+		
+		var platform: String
+		
+		var developmentRegion = "en"
+		var executable: String
+		var identifier: String
+		var name: String
+		var marketingVersion: String
+		var buildVersion: String
+		var minimumOSVersion: String
+		
+		var plistDictionary: [String: Any] {
+			let minimumOSVersionKey = (platform == "macOS" ? "LSMinimumSystemVersion" : "MinimumOSVersion")
+			return [
+				"CFBundleInfoDictionaryVersion": "6.0",
+				"CFBundlePackageType": "FMWK",
+				"CFBundleDevelopmentRegion": developmentRegion,
+				
+				"CFBundleExecutable": executable,
+				"CFBundleIdentifier": identifier,
+				"CFBundleName": name,
+				
+				"CFBundleShortVersionString": marketingVersion,
+				"CFBundleVersion": buildVersion,
+				minimumOSVersionKey: minimumOSVersion,
+				
+				"CFBundleSupportedPlatforms": [Target.platformLegacyName(fromPlatform: platform)]
+			]
+		}
+		
+		var plistData: Data {
+			get throws {
+				return try PropertyListSerialization.data(fromPropertyList: plistDictionary, format: .xml, options: 0)
+			}
+		}
+		
+	}
+	
 	/** Should be `nil` for non-macOS frameworks, otherwise should probably be A. */
 	var version: String?
 	
-	var libPath: FilePath
-	var headers: [FilePath]
-	var modules: [FilePath]
-	/** The framework resources, except for the Info.plist */
-	var resources: [FilePath]
+	var info: Info
 	
-	var pathsRoot: FilePath
+	var libPath: FilePath
+	var headers: (root: FilePath, files: [FilePath])?
+	var modules: (root: FilePath, files: [FilePath])?
+	/** The framework resources, except for the Info.plist */
+	var resources: (root: FilePath, files: [FilePath])?
 	
 	var skipExistingArtifacts: Bool
 	
@@ -53,8 +92,8 @@ struct UnbuiltFramework {
 			
 			/* Create links to folders if needed */
 			let relativeCurrentPath = FilePath("Versions/Current")
-			if !headers.isEmpty {try Config.fm.createSymbolicLink(atPath: destPath.appending(headersPathComponent).string, withDestinationPath: relativeCurrentPath.appending(headersPathComponent).string)}
-			if !modules.isEmpty {try Config.fm.createSymbolicLink(atPath: destPath.appending(modulesPathComponent).string, withDestinationPath: relativeCurrentPath.appending(modulesPathComponent).string)}
+			if headers != nil {try Config.fm.createSymbolicLink(atPath: destPath.appending(headersPathComponent).string, withDestinationPath: relativeCurrentPath.appending(headersPathComponent).string)}
+			if modules != nil {try Config.fm.createSymbolicLink(atPath: destPath.appending(modulesPathComponent).string, withDestinationPath: relativeCurrentPath.appending(modulesPathComponent).string)}
 			try Config.fm.createSymbolicLink(atPath: destPath.appending(resourcesPathComponent).string, withDestinationPath: relativeCurrentPath.appending(resourcesPathComponent).string)
 			try Config.fm.createSymbolicLink(atPath: destPath.appending(binaryPathComponent).string, withDestinationPath: relativeCurrentPath.appending(binaryPathComponent).string)
 			try Config.fm.createSymbolicLink(atPath: destPath.appending("Versions/Current").string, withDestinationPath: versionComponent.string)
@@ -68,13 +107,8 @@ struct UnbuiltFramework {
 		let infoplistPath = workDir.appending(infoplistPathComponents)
 		let installedLibPath = workDir.appending(binaryPathComponent)
 		
-		/* Create folders if needed */
-		if !headers.isEmpty {try Config.fm.ensureDirectory(path: headersPath)}
-		if !modules.isEmpty {try Config.fm.ensureDirectory(path: modulesPath)}
-		if !resources.isEmpty || version != nil {try Config.fm.ensureDirectory(path: resourcesPath)}
-		
 		/* Copy the binary */
-		try Config.fm.copyItem(at: pathsRoot.pushing(libPath).url, to: installedLibPath.url)
+		try Config.fm.copyItem(at: libPath.url, to: installedLibPath.url)
 		/* Renaming the lib */
 		Config.logger.info("Updating install name of dylib at \(installedLibPath)")
 		try Process.spawnAndStreamEnsuringSuccess(
@@ -83,23 +117,38 @@ struct UnbuiltFramework {
 			outputHandler: Process.logProcessOutputFactory()
 		)
 		
-		for header in headers {
-			guard header.root == nil else {
-				struct InvalidNonRelativeHeader : Error {var headerPath: FilePath}
-				throw InvalidNonRelativeHeader(headerPath: header)
+		if let headers = headers {
+			try installFiles(root: headers.root, files: headers.files, installDest: headersPath)
+		}
+		
+		if let modules = modules {
+			for module in modules.files {
+				guard module.root == nil, module.components.count == 1 else {
+					struct InvalidModulePath : Error {var path: FilePath}
+					throw InvalidModulePath(path: module)
+				}
+				try Config.fm.ensureDirectory(path: modulesPath.pushing(module).removingLastComponent())
+				try Config.fm.copyItem(at: modules.root.pushing(module).url, to: modulesPath.pushing(module).url)
 			}
-			let headerNoInclude: FilePath
-			if !header.starts(with: "include") {
-				Config.logger.warning("Got header not in the “include” directory, which is unexpected. Copying into the Framework without dropping first path component.")
-				headerNoInclude = header
-			} else {
-				/* The proper way to do this is the commented line below. However,
-				 * it currently crashes (Xcode 13A5155e, macOS 21A5268h) */
-//				headerNoInclude = FilePath(root: nil, header.components.dropFirst())
-				headerNoInclude = FilePath(String(header.string.dropFirst("include/".count)))
+		}
+		
+		if let resources = resources {
+			try installFiles(root: resources.root, files: resources.files, installDest: resourcesPath)
+		}
+		
+		/* Create the Info.plist */
+		try Config.fm.ensureDirectory(path: infoplistPath.removingLastComponent())
+		try info.plistData.write(to: infoplistPath.url)
+	}
+	
+	private func installFiles(root: FilePath, files: [FilePath], installDest: FilePath) throws {
+		for file in files {
+			guard file.root == nil else {
+				struct InvalidNonRelativeHeader : Error {var path: FilePath}
+				throw InvalidNonRelativeHeader(path: file)
 			}
-			try Config.fm.ensureDirectory(path: headersPath.pushing(headerNoInclude).removingLastComponent())
-			try Config.fm.copyItem(at: pathsRoot.pushing(header).url, to: headersPath.pushing(headerNoInclude).url)
+			try Config.fm.ensureDirectory(path: installDest.pushing(file).removingLastComponent())
+			try Config.fm.copyItem(at: root.pushing(file).url, to: installDest.pushing(file).url)
 		}
 	}
 	

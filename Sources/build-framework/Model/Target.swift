@@ -45,7 +45,13 @@ struct Target : Hashable, ExpressibleByArgument, CustomStringConvertible {
 		return openSSLConfigName
 	}
 	
-	var platformLegacyName: String {
+}
+
+
+@available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
+extension Target {
+	
+	static func platformLegacyName(fromPlatform platform: String) -> String {
 		switch platform {
 			case "macOS":             return "MacOSX"
 			case "iOS":               return "iPhoneOS"
@@ -54,11 +60,15 @@ struct Target : Hashable, ExpressibleByArgument, CustomStringConvertible {
 			case "tvOS_Simulator":    return "AppleTVSimulator"
 			case "watchOS":           return "WatchOS"
 			case "watchOS_Simulator": return "WatchSimulator"
-			default: return platform.replacingOccurrences(of: "_", with: " ")
+			default: return platform.replacingOccurrences(of: "_", with: "")
 		}
 	}
 	
-	var platformVersionName: String {
+	var platformLegacyName: String {
+		return Self.platformLegacyName(fromPlatform: platform)
+	}
+	
+	static func platformVersionName(fromPlatform platform: String, sdk: String) -> String {
 		switch (platform, sdk) {
 			case ("macOS", "iOS"):         return "mac-catalyst"
 			case ("macOS", _):             return "macos"
@@ -70,6 +80,10 @@ struct Target : Hashable, ExpressibleByArgument, CustomStringConvertible {
 			case ("watchOS_Simulator", _): return "watchos-simulator"
 			default: return platform.lowercased().replacingOccurrences(of: "_", with: "-")
 		}
+	}
+	
+	var platformVersionName: String {
+		return Self.platformVersionName(fromPlatform: platform, sdk: sdk)
 	}
 	
 }

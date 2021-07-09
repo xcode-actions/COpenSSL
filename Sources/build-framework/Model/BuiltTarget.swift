@@ -77,8 +77,8 @@ struct BuiltTarget {
 		try Config.fm.ensureDirectoryDeleted(path: destination.removingLastComponent())
 		try Config.fm.ensureDirectory(path: destination.removingLastComponent())
 		
-		let hasBitcode = try checkForBitcode(absoluteStaticLibrariesPaths)
-		let (sdk, minSdk) = try getSdkVersions(absoluteStaticLibrariesPaths)
+		let hasBitcode = try Self.checkForBitcode(absoluteStaticLibrariesPaths)
+		let (sdk, minSdk) = try Self.getSdkVersions(absoluteStaticLibrariesPaths)
 		Config.logger.debug("got sdk \(sdk), min sdk \(minSdk)", metadata: ["target": "\(target)"])
 		
 		let objectDir = buildPaths.libObjectsDir(for: target)
@@ -92,8 +92,8 @@ struct BuiltTarget {
 				"-arch", target.arch,
 				"-platform_version", target.platformVersionName, minSdk, sdk,
 				"-syslibroot", "\(buildPaths.developerDir)/Platforms/\(target.platformLegacyName).platform/Developer/SDKs/\(target.platformLegacyName).sdk",
-				"-compatibility_version", normalizedOpenSSLVersion(opensslVersion), /* Not true, but we do not care; the resulting lib will be in a framework which will be embedded in the app and not reused 99.99% of the time, so… */
-				"-current_version", normalizedOpenSSLVersion(opensslVersion),
+				"-compatibility_version", Self.normalizedOpenSSLVersion(opensslVersion), /* Not true, but we do not care; the resulting lib will be in a framework which will be embedded in the app and not reused 99.99% of the time, so… */
+				"-current_version", Self.normalizedOpenSSLVersion(opensslVersion),
 				"-o", destination.string
 			],
 			outputHandler: Process.logProcessOutputFactory()
@@ -101,29 +101,51 @@ struct BuiltTarget {
 		return destination
 	}
 	
-	/* Inspect Mach-O load commands to get minimum SDK version.
-	 *
-	 * Depending on the actual minimum SDK version it may look like this for
-	 * modern SDKs:
-	 *
-	 *     Load command 1
-	 *            cmd LC_BUILD_VERSION
-	 *        cmdsize 24
-	 *       platform 8
-	 *            sdk 13.2                   <-- target SDK
-	 *          minos 12.0                   <-- minimum SDK
-	 *         ntools 0
-	 *
-	 * Or like this for older versions, with a platform-dependent tag:
-	 *
-	 *     Load command 1
-	 *           cmd LC_VERSION_MIN_WATCHOS
-	 *       cmdsize 16
-	 *       version 4.0                     <-- minimum SDK
-	 *           sdk 6.1                     <-- target SDK */
-	private func getSdkVersions(_ libs: [FilePath]) throws -> (sdk: String, minSdk: String) {
-		var sdk: String?
-		var minSdk: String?
+}
+
+
+/* Utilities. Not sure it makes a lot of sense to have these functions here, but
+ * I don’t really know where to put them. */
+@available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
+extension BuiltTarget {
+	
+	enum MultipleSdkVersionsResolution {
+		
+		case error
+		case returnMin
+		case returnMax
+		
+	}
+	
+	/** Inspect Mach-O load commands to get minimum SDK version.
+	 
+	 Uses `otool`’s output to get this.
+	 
+	 Depending on the actual minimum SDK version it may look like this for
+	 modern SDKs:
+	 
+	 ```
+	 Load command 1
+	        cmd LC_BUILD_VERSION
+	    cmdsize 24
+	   platform 8
+	        sdk 13.2   <-- target SDK
+	      minos 12.0   <-- minimum SDK
+	     ntools 0
+	 ```
+	 
+	 Or like this for older versions, with a platform-dependent tag:
+	 
+	 ```
+	 Load command 1
+	       cmd LC_VERSION_MIN_WATCHOS
+	   cmdsize 16
+	   version 4.0   <-- minimum SDK
+	       sdk 6.1   <-- target SDK
+	 ``` */
+	static func getSdkVersions(_ libs: [FilePath], multipleSdkVersionsResolution: MultipleSdkVersionsResolution = .error) throws -> (sdk: String, minSdk: String) {
+		var sdks = Set<String>()
+		var minSdks = Set<String>()
 		for lib in libs {
 			var error: Error?
 			var lastCommand: String?
@@ -141,27 +163,23 @@ struct BuiltTarget {
 								(str.hasPrefix("minos ")   && lastCommand == "LC_BUILD_VERSION") ||
 								(str.hasPrefix("version ") && (lastCommand ?? "").hasPrefix("LC_VERSION_MIN_"))
 							):
-								if minSdk == nil {minSdk = lastWord}
-								else {
-									guard minSdk == lastWord else {
-										Config.logger.error("found min sdk \(lastWord) but current min sdk is \(minSdk ?? "<nil>")")
-										struct MultipleMinSdkVersionFound : Error {var libs: [FilePath]}
-										error = MultipleMinSdkVersionFound(libs: libs)
-										return
-									}
+								minSdks.insert(lastWord)
+								guard multipleSdkVersionsResolution != .error || minSdks.count == 1 else {
+									Config.logger.error("found multiple min sdks; expected only one: \(minSdks)")
+									struct MultipleMinSdkVersionFound : Error {var libs: [FilePath]}
+									error = MultipleMinSdkVersionFound(libs: libs)
+									return
 								}
 							case let str where (
 								str.hasPrefix("sdk ") && (lastCommand == "LC_BUILD_VERSION" || (lastCommand ?? "").hasPrefix("LC_VERSION_MIN_"))
 							):
 								guard lastWord != "n/a" else {return}
-								if sdk == nil {sdk = lastWord}
-								else {
-									guard sdk == lastWord else {
-										Config.logger.error("found sdk \(lastWord) but current sdk is \(sdk ?? "<nil>")")
-										struct MultipleSdkVersionFound : Error {var libs: [FilePath]}
-										error = MultipleSdkVersionFound(libs: libs)
-										return
-									}
+								sdks.insert(lastWord)
+								guard multipleSdkVersionsResolution != .error || sdks.count == 1 else {
+									Config.logger.error("found multiple sdks; expected only one: \(sdks)")
+									struct MultipleSdkVersionFound : Error {var libs: [FilePath]}
+									error = MultipleSdkVersionFound(libs: libs)
+									return
 								}
 								
 							default: (/*nop: we simply ignore the line*/)
@@ -178,15 +196,29 @@ struct BuiltTarget {
 			)
 			if let e = error {throw e}
 		}
-		guard let sdkNonOptional = sdk else {
-			struct CannotGetSdk : Error {var libs: [FilePath]}
-			throw CannotGetSdk(libs: libs)
+		guard !sdks.isEmpty && !minSdks.isEmpty else {
+			struct CannotGetSdkOrMinSdk : Error {var libs: [FilePath]}
+			throw CannotGetSdkOrMinSdk(libs: libs)
 		}
-		guard let minSdkNonOptional = minSdk else {
-			struct CannotGetMinSdk : Error {var libs: [FilePath]}
-			throw CannotGetMinSdk(libs: libs)
+		switch multipleSdkVersionsResolution {
+			case .error:
+				/* If there were multiple sdk versions found, we’d have returned an
+				 * error earlier, so the assert below is valid. */
+				assert(sdks.count == 1 && minSdks.count == 1)
+				return (sdks.randomElement()!, minSdks.randomElement()!)
+				
+			case .returnMin:
+				return (
+					   sdks.sorted(by: { $0.compare($1, options: .numeric) == .orderedAscending }).first!,
+					minSdks.sorted(by: { $0.compare($1, options: .numeric) == .orderedAscending }).first!
+				)
+				
+			case .returnMax:
+				return (
+						sdks.sorted(by: { $0.compare($1, options: .numeric) == .orderedAscending }).last!,
+					minSdks.sorted(by: { $0.compare($1, options: .numeric) == .orderedAscending }).last!
+				)
 		}
-		return (sdkNonOptional, minSdkNonOptional)
 	}
 	
 	/** If any lib contains bitcode, we return `true`.
@@ -201,7 +233,7 @@ struct BuiltTarget {
 	 
 	 which is apparently [the Apple-recommended method](https://forums.developer.apple.com/message/7038)
 	 (link is dead, it’s from [this stackoverflow comment](https://stackoverflow.com/questions/32808642#comment64079201_33615568)). */
-	private func checkForBitcode(_ libs: [FilePath]) throws -> Bool {
+	static func checkForBitcode(_ libs: [FilePath]) throws -> Bool {
 		var foundLLVM = false
 		var foundBitcode = false
 		for lib in libs {
@@ -235,7 +267,7 @@ struct BuiltTarget {
 		return foundBitcode || foundLLVM
 	}
 	
-	private func normalizedOpenSSLVersion(_ version: String) -> String {
+	static func normalizedOpenSSLVersion(_ version: String) -> String {
 		let version = String(version.split(separator: "-").first ?? "") /* We remove all beta reference (example of version with beta: 3.0.0-beta1) */
 		if let letter = version.last, let ascii = letter.asciiValue, letter.isLetter, letter.isLowercase {
 			/* We probably have a version of the for “1.2.3a” (we should do more
@@ -247,7 +279,6 @@ struct BuiltTarget {
 			let value = ascii - Character("a").asciiValue! + 1
 			return base + String(format: "%02d", value)
 		}
-		/* TODO: I think we’ll have to drop the beta from beta versions. */
 		return version
 	}
 	
