@@ -292,7 +292,7 @@ struct BuildFramework : ParsableCommand {
 					info: .init(
 						platform: platformAndSdk.platform,
 						executable: buildPaths.productName,
-						identifier: "me.frizlab." + buildPaths.productName /* TODO */,
+						identifier: "com.xcode-actions." + buildPaths.productName /* TODO */,
 						name: buildPaths.productName,
 						marketingVersion: BuiltTarget.normalizedOpenSSLVersion(opensslVersion),
 						buildVersion: "1",
