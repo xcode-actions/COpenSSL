@@ -179,7 +179,7 @@ struct BuildFramework : ParsableCommand {
 				}
 			}
 			
-			/* Merge the headers and drop the “include” path component */
+			/* Merge the headers and drop the “include/openssl” path component. */
 			var mergedHeaders = [FilePath]()
 			for header in builtTarget.headers {
 				/* Correct way to do this is lines below, but crashes for now. */
@@ -197,7 +197,7 @@ struct BuildFramework : ParsableCommand {
 					continue
 				}
 				let headerNoInclude = FilePath(String(header.string.dropFirst("include/openssl/".count)))
-				let unmergedHeader = UnmergedUnpatchedHeader(
+				var unmergedHeader = UnmergedUnpatchedHeader(
 					headersAndArchs: targets.map{ (buildPaths.installDir(for: $0).pushing(header), $0.arch) },
 					patches: [
 						{ str in str.replacingOccurrences(of: "include <openssl/", with: "include <\(buildPaths.productName)/") },
@@ -205,15 +205,22 @@ struct BuildFramework : ParsableCommand {
 					],
 					skipExistingArtifacts: skipExistingArtifacts
 				)
-				try unmergedHeader.patchAndMergeHeaders(at: buildPaths.mergedHeadersDir.appending(platformAndSdk.pathComponent).pushing(headerNoInclude))
+				try unmergedHeader.patchAndMergeHeaders(at: buildPaths.mergedDynamicHeadersDir.appending(platformAndSdk.pathComponent).pushing(headerNoInclude))
+				let regex = try! NSRegularExpression(pattern: #"include <openssl/([^>]*)>"#, options: [])
+				unmergedHeader.patches[0] = { str in
+					let objstr = NSMutableString(string: str)
+					regex.replaceMatches(in: objstr, range: NSRange(location: 0, length: objstr.length), withTemplate: #"include "$1""#)
+					return objstr as String
+				}
+				try unmergedHeader.patchAndMergeHeaders(at: buildPaths.mergedStaticHeadersDir.appending(platformAndSdk.pathComponent).pushing(headerNoInclude))
 				mergedHeaders.append(headerNoInclude)
 			}
-			/* Create the umbrella header */
-			let umbrellaHeader: FilePath
+			/* Create the umbrella header for the dynamic framework. */
+			let dynamicUmbrellaHeader: FilePath
 			do {
 				let unbuiltUmbrellaHeader = UnbuiltUmbrellaHeader(headers: mergedHeaders, productName: buildPaths.productName, skipExistingArtifacts: skipExistingArtifacts)
-				umbrellaHeader = FilePath(buildPaths.productName + ".h")
-				try unbuiltUmbrellaHeader.buildUmbrellaHeader(at: buildPaths.mergedHeadersDir.appending(platformAndSdk.pathComponent).pushing(umbrellaHeader))
+				dynamicUmbrellaHeader = FilePath(buildPaths.productName + ".h")
+				try unbuiltUmbrellaHeader.buildUmbrellaHeader(at: buildPaths.mergedDynamicHeadersDir.appending(platformAndSdk.pathComponent).pushing(dynamicUmbrellaHeader))
 			}
 			
 			/* Create FAT static libs, one per lib */
@@ -269,8 +276,8 @@ struct BuildFramework : ParsableCommand {
 					),
 					libPath: fatDynamicLib,
 					headers: (
-						mergedHeaders.map{ (root: buildPaths.mergedHeadersDir.appending(platformAndSdk.pathComponent), file: $0) } +
-						[(root: buildPaths.mergedHeadersDir.appending(platformAndSdk.pathComponent), file: umbrellaHeader)]
+						mergedHeaders.map{ (root: buildPaths.mergedDynamicHeadersDir.appending(platformAndSdk.pathComponent), file: $0) } +
+						[(root: buildPaths.mergedDynamicHeadersDir.appending(platformAndSdk.pathComponent), file: dynamicUmbrellaHeader)]
 					),
 					modules: [(root: buildPaths.templatesDir, file: "module.modulemap.xibloc")],
 					resources: [],

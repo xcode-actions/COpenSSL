@@ -37,17 +37,26 @@ struct BuildPaths {
 	let libObjectsDir: FilePath
 	/** The dylibs created from the `libObjectsDir`. */
 	let dylibsDir: FilePath
-	/** Contains the headers from Target merged into platform+sdk tuble.
+	/** Contains the headers from Target merged into platform+sdk tuple for the
+	 static framework.
 	 
 	 Sometimes the headers are not exactly the same between architectures, so we
-	 have to merge them in order to get the correct headers all the time. */
-	let mergedHeadersDir: FilePath
+	 have to merge them in order to get the correct headers all the time. Also
+	 the headers have to be patched to be able to be used in an XCFramework. */
+	let mergedStaticHeadersDir: FilePath
 	/** Contains the libs from previous step, but merged as one.
 	 
 	 We have to do this because xcodebuild does not do it automatically when
 	 building an xcframework (this is understandable) and xcframeworks do not
 	 support multiple libs. */
 	let mergedFatStaticLibsDir: FilePath
+	/** Contains the headers from Target merged into platform+sdk tuple for the
+	 dynamic framework.
+	 
+	 Sometimes the headers are not exactly the same between architectures, so we
+	 have to merge them in order to get the correct headers all the time. Also
+	 the headers have to be patched to be able to be used in a Framework. */
+	let mergedDynamicHeadersDir: FilePath
 	/** Contains the libs from previous step, one per platform+sdk instead of one
 	 per target (marged as FAT).
 	 
@@ -108,7 +117,8 @@ struct BuildPaths {
 		self.libObjectsDir = self.buildDir.appending("step3.intermediate-derivatives/lib-objects")
 		self.dylibsDir     = self.buildDir.appending("step3.intermediate-derivatives/dylibs")
 		
-		self.mergedHeadersDir        = self.buildDir.appending("step4.final-derivatives/headers")
+		self.mergedStaticHeadersDir  = self.buildDir.appending("step4.final-derivatives/static-headers")
+		self.mergedDynamicHeadersDir = self.buildDir.appending("step4.final-derivatives/dynamic-headers")
 		self.mergedFatStaticLibsDir  = self.buildDir.appending("step4.final-derivatives/static-libs")
 		self.mergedFatDynamicLibsDir = self.buildDir.appending("step4.final-derivatives/dynamic-libs")
 		
@@ -133,8 +143,9 @@ struct BuildPaths {
 		try Config.fm.ensureDirectory(path: libObjectsDir)
 		try Config.fm.ensureDirectory(path: dylibsDir)
 		
-		try Config.fm.ensureDirectory(path: mergedHeadersDir)
+		try Config.fm.ensureDirectory(path: mergedStaticHeadersDir)
 		try Config.fm.ensureDirectory(path: mergedFatStaticLibsDir)
+		try Config.fm.ensureDirectory(path: mergedDynamicHeadersDir)
 		try Config.fm.ensureDirectory(path: mergedFatDynamicLibsDir)
 		
 		try Config.fm.ensureDirectory(path: finalFrameworksDir)
