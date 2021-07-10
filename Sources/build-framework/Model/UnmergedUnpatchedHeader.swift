@@ -3,12 +3,13 @@ import Foundation
 
 
 @available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
-struct UnmergedHeader {
+struct UnmergedUnpatchedHeader {
 	
 	var headersAndArchs: [(header: FilePath, arch: String)]
+	var patches: [(String) -> String]
 	var skipExistingArtifacts: Bool
 	
-	func mergeHeaders(at destPath: FilePath) throws {
+	func patchAndMergeHeaders(at destPath: FilePath) throws {
 		guard headersAndArchs.count > 0 else {
 			Config.logger.warning("Asked to create a merged header at path \(destPath), but no headers given.")
 			return
@@ -26,8 +27,15 @@ struct UnmergedHeader {
 		
 		if !needsMerge {
 			/* We simply copy any header to the destination */
-			Config.logger.debug("  -> No need for a merge; copying header directly")
-			try Config.fm.copyItem(at: headersAndArchs.first!.header.url, to: destPath.url)
+			if patches.isEmpty {
+				Config.logger.debug("  -> No need for merge nor patch; copying header directly")
+				try Config.fm.copyItem(at: headersAndArchs.first!.header.url, to: destPath.url)
+			} else {
+				Config.logger.debug("  -> No need for merge; simply patching header")
+				let str = try String(contentsOf: headersAndArchs.first!.header.url)
+				let patchedStr = patches.reduce(str, { $1($0) })
+				try patchedStr.write(to: destPath.url, atomically: true, encoding: .utf8)
+			}
 		} else {
 			Config.logger.debug("  -> Merge is needed")
 			var result = """
@@ -40,7 +48,7 @@ struct UnmergedHeader {
 			for (header, arch) in headersAndArchs {
 				defer {first = false}
 				result += (first ? "#if " : "#elif ") + "__is_target_arch(\(arch))\n"
-				result += try String(contentsOf: header.url) + "\n"
+				result += try patches.reduce(String(contentsOf: header.url), { $1($0) })  + "\n"
 			}
 			result += "#endif\n"
 			try result.write(to: destPath.url, atomically: true, encoding: .utf8)

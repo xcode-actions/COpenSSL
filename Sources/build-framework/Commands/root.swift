@@ -183,18 +183,29 @@ struct BuildFramework : ParsableCommand {
 			var mergedHeaders = [FilePath]()
 			for header in builtTarget.headers {
 				/* Correct way to do this is lines below, but crashes for now. */
-//				guard header.components.first?.string == "include" else {
-//					Config.logger.warning("Got a header not in “include” dir. Skipping.")
+//				guard header.components.starts(with: ["include", "openssl"]) else {
+//					Config.logger.warning("Got a header not in “include/openssl” dir. Skipping.")
 //					continue
 //				}
-//				let headerNoInclude = FilePath(root: nil, header.components.dropFirst())
-				guard header.string.starts(with: "include/") else {
-					Config.logger.warning("Got a header not in “include” dir. Skipping.")
+//				let headerNoInclude = FilePath(root: nil, header.components.dropFirst(2))
+				guard header.string.starts(with: "include/openssl/") else {
+					Config.logger.warning("Got a header not in “include/openssl” dir. Skipping.")
 					continue
 				}
-				let headerNoInclude = FilePath(String(header.string.dropFirst("include/".count)))
-				let unmergedHeader = UnmergedHeader(headersAndArchs: targets.map{ (buildPaths.installDir(for: $0).pushing(header), $0.arch) }, skipExistingArtifacts: skipExistingArtifacts)
-				try unmergedHeader.mergeHeaders(at: buildPaths.mergedHeadersDir.appending(platformAndSdk.pathComponent).pushing(headerNoInclude))
+				guard header.lastComponent?.string != "asn1_mac.h" else {
+					Config.logger.info("Skipping obsolete file asn1_mac.h")
+					continue
+				}
+				let headerNoInclude = FilePath(String(header.string.dropFirst("include/openssl/".count)))
+				let unmergedHeader = UnmergedUnpatchedHeader(
+					headersAndArchs: targets.map{ (buildPaths.installDir(for: $0).pushing(header), $0.arch) },
+					patches: [
+						{ str in str.replacingOccurrences(of: "include <openssl/", with: "include <\(buildPaths.productName)/") },
+						{ str in str.replacingOccurrences(of: "include <inttypes.h>", with: "include <sys/types.h>") }
+					],
+					skipExistingArtifacts: skipExistingArtifacts
+				)
+				try unmergedHeader.patchAndMergeHeaders(at: buildPaths.mergedHeadersDir.appending(platformAndSdk.pathComponent).pushing(headerNoInclude))
 				mergedHeaders.append(headerNoInclude)
 			}
 			/* Create the umbrella header */
