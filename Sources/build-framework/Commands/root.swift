@@ -255,14 +255,34 @@ struct BuildFramework : ParsableCommand {
 				if skipExistingArtifacts && Config.fm.fileExists(atPath: destPath.string) {
 					Config.logger.info("Skipping creation of \(destPath) because it already exists")
 				} else {
+					try Config.fm.ensureFileDeleted(path: destPath)
+					try Config.fm.ensureDirectory(path: destPath.removingLastComponent())
 					let filecontent = try String(contentsOf: buildPaths.templatesDir.appending("static-lib/module.modulemap.xibloc").url)
 					try filecontent.applying(xibLocInfo: Str2StrXibLocInfo(replacements: ["|": buildPaths.productName])!)
 						.write(to: destPath.url, atomically: false, encoding: .utf8)
 				}
 			}
 			
-			/* Nothing else to build for the static framework, we register it. */
-			librariesAndHeadersDir.append((library: fatStaticLib, headersDir: buildPaths.mergedStaticHeadersDir.appending(platformAndSdk.pathComponent)))
+			/* Let’s copy the static stuff to the final folder. */
+			let staticLibAndHeaders: (library: FilePath, headersDir: FilePath)
+			do {
+				staticLibAndHeaders = (
+					buildPaths.finalStaticLibsAndHeadersDir.appending(platformAndSdk.pathComponent).appending(buildPaths.staticLibProductNameComponent),
+					buildPaths.finalStaticLibsAndHeadersDir.appending(platformAndSdk.pathComponent).appending("include")
+				)
+				if skipExistingArtifacts && Config.fm.fileExists(atPath: staticLibAndHeaders.library.string) && Config.fm.fileExists(atPath: staticLibAndHeaders.headersDir.string) {
+					Config.logger.info("Skipping creation of \(staticLibAndHeaders) because it already exists")
+				} else {
+					try Config.fm.ensureFileDeleted(path: staticLibAndHeaders.library)
+					try Config.fm.ensureDirectoryDeleted(path: staticLibAndHeaders.headersDir)
+					try Config.fm.ensureDirectory(path: staticLibAndHeaders.library.removingLastComponent())
+					try Config.fm.ensureDirectory(path: staticLibAndHeaders.headersDir.removingLastComponent())
+					
+					try Config.fm.copyItem(at: fatStaticLib.url, to: staticLibAndHeaders.library.url)
+					try Config.fm.copyItem(at: buildPaths.mergedStaticHeadersDir.appending(platformAndSdk.pathComponent).url, to: staticLibAndHeaders.headersDir.url)
+				}
+			}
+			librariesAndHeadersDir.append(staticLibAndHeaders)
 			
 			/* Create FAT dylib from the dylibs generated earlier */
 			let fatDynamicLib: FilePath
