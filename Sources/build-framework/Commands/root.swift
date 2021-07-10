@@ -258,6 +258,13 @@ struct BuildFramework : ParsableCommand {
 				frameworkPath = buildPaths.finalFrameworksDir.appending(platformAndSdk.pathComponent).appending(buildPaths.frameworkProductNameComponent)
 				try unbuiltFramework.buildFramework(at: frameworkPath)
 			}
+			frameworks.append(frameworkPath)
+		}
+		
+		/* Build the dynamic XCFramework */
+		do {
+			let unbuiltXCFramework = UnbuiltDynamicXCFramework(frameworks: frameworks, skipExistingArtifacts: skipExistingArtifacts)
+			try unbuiltXCFramework.buildXCFramework(at: buildPaths.resultXCFrameworkDynamic)
 		}
 	}
 	
