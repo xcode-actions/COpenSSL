@@ -1,0 +1,8 @@
+framework module |ModuleName| {
+	umbrella header "|ModuleName|.h"
+	
+	export *
+	module * {
+		export *
+	}
+}

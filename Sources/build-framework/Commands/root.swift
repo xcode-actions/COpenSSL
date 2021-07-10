@@ -197,6 +197,13 @@ struct BuildFramework : ParsableCommand {
 				try unmergedHeader.mergeHeaders(at: buildPaths.mergedHeadersDir.appending(platformAndSdk.pathComponent).pushing(headerNoInclude))
 				mergedHeaders.append(headerNoInclude)
 			}
+			/* Create the umbrella header */
+			let umbrellaHeader: FilePath
+			do {
+				let unbuiltUmbrellaHeader = UnbuiltUmbrellaHeader(headers: mergedHeaders, productName: buildPaths.productName, skipExistingArtifacts: skipExistingArtifacts)
+				umbrellaHeader = FilePath(buildPaths.productName + ".h")
+				try unbuiltUmbrellaHeader.buildUmbrellaHeader(at: buildPaths.mergedHeadersDir.appending(platformAndSdk.pathComponent).pushing(umbrellaHeader))
+			}
 			
 			/* Create FAT static libs, one per lib */
 			var fatStaticLibs = [FilePath]()
@@ -250,9 +257,12 @@ struct BuildFramework : ParsableCommand {
 						minimumOSVersion: minimumOSVersion
 					),
 					libPath: fatDynamicLib,
-					headers: (root: buildPaths.mergedHeadersDir.appending(platformAndSdk.pathComponent), files: mergedHeaders),
-					modules: nil,
-					resources: nil,
+					headers: (
+						mergedHeaders.map{ (root: buildPaths.mergedHeadersDir.appending(platformAndSdk.pathComponent), file: $0) } +
+						[(root: buildPaths.mergedHeadersDir.appending(platformAndSdk.pathComponent), file: umbrellaHeader)]
+					),
+					modules: [(root: buildPaths.templatesDir, file: "module.modulemap.xibloc")],
+					resources: [],
 					skipExistingArtifacts: skipExistingArtifacts
 				)
 				frameworkPath = buildPaths.finalFrameworksDir.appending(platformAndSdk.pathComponent).appending(buildPaths.frameworkProductNameComponent)

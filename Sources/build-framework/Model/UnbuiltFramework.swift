@@ -1,6 +1,9 @@
 import Foundation
 import System
 
+import XibLoc
+import SystemPackage
+
 
 
 @available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
@@ -51,10 +54,10 @@ struct UnbuiltFramework {
 	var info: Info
 	
 	var libPath: FilePath
-	var headers: (root: FilePath, files: [FilePath])?
-	var modules: (root: FilePath, files: [FilePath])?
+	var headers: [(root: FilePath, file: FilePath)]
+	var modules: [(root: FilePath, file: FilePath)]
 	/** The framework resources, except for the Info.plist */
-	var resources: (root: FilePath, files: [FilePath])?
+	var resources: [(root: FilePath, file: FilePath)]
 	
 	var skipExistingArtifacts: Bool
 	
@@ -92,14 +95,16 @@ struct UnbuiltFramework {
 			
 			/* Create links to folders if needed */
 			let relativeCurrentPath = FilePath("Versions/Current")
-			if headers != nil {try Config.fm.createSymbolicLink(atPath: destPath.appending(headersPathComponent).string, withDestinationPath: relativeCurrentPath.appending(headersPathComponent).string)}
-			if modules != nil {try Config.fm.createSymbolicLink(atPath: destPath.appending(modulesPathComponent).string, withDestinationPath: relativeCurrentPath.appending(modulesPathComponent).string)}
+			if !headers.isEmpty {try Config.fm.createSymbolicLink(atPath: destPath.appending(headersPathComponent).string, withDestinationPath: relativeCurrentPath.appending(headersPathComponent).string)}
+			if !modules.isEmpty {try Config.fm.createSymbolicLink(atPath: destPath.appending(modulesPathComponent).string, withDestinationPath: relativeCurrentPath.appending(modulesPathComponent).string)}
 			try Config.fm.createSymbolicLink(atPath: destPath.appending(resourcesPathComponent).string, withDestinationPath: relativeCurrentPath.appending(resourcesPathComponent).string)
 			try Config.fm.createSymbolicLink(atPath: destPath.appending(binaryPathComponent).string, withDestinationPath: relativeCurrentPath.appending(binaryPathComponent).string)
 			try Config.fm.createSymbolicLink(atPath: destPath.appending("Versions/Current").string, withDestinationPath: versionComponent.string)
 		} else {
 			workDir = destPath
 		}
+		
+		let moduleName = binaryPathComponent.string
 		
 		let headersPath = workDir.appending(headersPathComponent)
 		let modulesPath = workDir.appending(modulesPathComponent)
@@ -117,38 +122,41 @@ struct UnbuiltFramework {
 			outputHandler: Process.logProcessOutputFactory()
 		)
 		
-		if let headers = headers {
-			try installFiles(root: headers.root, files: headers.files, installDest: headersPath)
-		}
-		
-		if let modules = modules {
-			for module in modules.files {
-				guard module.root == nil, module.components.count == 1 else {
-					struct InvalidModulePath : Error {var path: FilePath}
-					throw InvalidModulePath(path: module)
-				}
-				try Config.fm.ensureDirectory(path: modulesPath.pushing(module).removingLastComponent())
-				try Config.fm.copyItem(at: modules.root.pushing(module).url, to: modulesPath.pushing(module).url)
-			}
-		}
-		
-		if let resources = resources {
-			try installFiles(root: resources.root, files: resources.files, installDest: resourcesPath)
-		}
-		
 		/* Create the Info.plist */
 		try Config.fm.ensureDirectory(path: infoplistPath.removingLastComponent())
 		try info.plistData.write(to: infoplistPath.url)
+		
+		try installFiles(headers,   installDest: headersPath,   moduleName: moduleName)
+		try installFiles(resources, installDest: resourcesPath, moduleName: moduleName)
+		
+		for module in modules {
+			/* TODO: Commented check crashes currently in Xcode/macOS beta 2 */
+			guard module.file.root == nil/*, module.file.components.count == 1*/ else {
+				struct InvalidModulePath : Error {var path: FilePath}
+				throw InvalidModulePath(path: module.file)
+			}
+			try installFileDetemplating(module.root.pushing(module.file), to: modulesPath.pushing(module.file), moduleName: moduleName)
+		}
 	}
 	
-	private func installFiles(root: FilePath, files: [FilePath], installDest: FilePath) throws {
+	private func installFiles(_ files: [(root: FilePath, file: FilePath)], installDest: FilePath, moduleName: String) throws {
 		for file in files {
-			guard file.root == nil else {
+			guard file.file.root == nil else {
 				struct InvalidNonRelativeHeader : Error {var path: FilePath}
-				throw InvalidNonRelativeHeader(path: file)
+				throw InvalidNonRelativeHeader(path: file.file)
 			}
-			try Config.fm.ensureDirectory(path: installDest.pushing(file).removingLastComponent())
-			try Config.fm.copyItem(at: root.pushing(file).url, to: installDest.pushing(file).url)
+			try installFileDetemplating(file.root.pushing(file.file), to: installDest.pushing(file.file), moduleName: moduleName)
+		}
+	}
+	
+	private func installFileDetemplating(_ source: FilePath, to dest: FilePath, moduleName: String) throws {
+		try Config.fm.ensureDirectory(path: dest.removingLastComponent())
+		if source.extension == "xibloc", let stem = source.stem {
+			let filecontent = try String(contentsOf: source.url)
+			try filecontent.applying(xibLocInfo: Str2StrXibLocInfo(replacements: ["|": moduleName])!)
+				.write(to: dest.removingLastComponent().appending(stem).url, atomically: false, encoding: .utf8)
+		} else {
+			try Config.fm.copyItem(at: source.url, to: dest.url)
 		}
 	}
 	

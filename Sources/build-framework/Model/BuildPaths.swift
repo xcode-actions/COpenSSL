@@ -104,13 +104,13 @@ struct BuildPaths {
 		self.sourcesDir  = self.buildDir.appending("step1.sources-and-builds")
 		self.installsDir = self.buildDir.appending("step2.installs")
 		
-		self.fatStaticDir  = self.buildDir.appending("step3.lib-derivatives/fat-static-libs")
-		self.libObjectsDir = self.buildDir.appending("step3.lib-derivatives/lib-objects")
-		self.dylibsDir     = self.buildDir.appending("step3.lib-derivatives/merged-dynamic-libs")
+		self.fatStaticDir  = self.buildDir.appending("step3.intermediate-derivatives/fat-static-libs")
+		self.libObjectsDir = self.buildDir.appending("step3.intermediate-derivatives/lib-objects")
+		self.dylibsDir     = self.buildDir.appending("step3.intermediate-derivatives/dylibs")
 		
-		self.mergedHeadersDir        = self.buildDir.appending("step4.merged-products/headers")
-		self.mergedFatStaticLibsDir  = self.buildDir.appending("step4.merged-products/static")
-		self.mergedFatDynamicLibsDir = self.buildDir.appending("step4.merged-products/dynamic")
+		self.mergedHeadersDir        = self.buildDir.appending("step4.final-derivatives/headers")
+		self.mergedFatStaticLibsDir  = self.buildDir.appending("step4.final-derivatives/static-libs")
+		self.mergedFatDynamicLibsDir = self.buildDir.appending("step4.final-derivatives/dynamic-libs")
 		
 		self.finalFrameworksDir           = self.buildDir.appending("step5.final-frameworks-and-libs/frameworks")
 		self.finalStaticLibsAndHeadersDir = self.buildDir.appending("step5.final-frameworks-and-libs/static-libs-and-headers")
