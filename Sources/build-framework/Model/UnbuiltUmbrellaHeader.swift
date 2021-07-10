@@ -8,6 +8,8 @@ struct UnbuiltUmbrellaHeader {
 	var headers: [FilePath]
 	var productName: String
 	
+	var modularImports: Bool
+	
 	var skipExistingArtifacts: Bool
 	
 	func buildUmbrellaHeader(at destPath: FilePath) throws {
@@ -25,7 +27,11 @@ struct UnbuiltUmbrellaHeader {
 		Config.logger.info("Creating umbrella header \(destPath) from \(headers.count) header(s)")
 		var contents = "/* Umbrella header for \(productName) */\n\n"
 		for header in headers {
-			contents += "#include <\(productName)/\(header.string)>\n"
+			if modularImports {
+				contents += "#include <\(productName)/\(header.string)>\n"
+			} else {
+				contents += #"#include "\#(header.string)"\#n"#
+			}
 		}
 		try contents.write(to: destPath.url, atomically: false, encoding: .utf8)
 	}

@@ -1,0 +1,4 @@
+module |ModuleName| {
+	header "|ModuleName|.h"
+	export *
+}

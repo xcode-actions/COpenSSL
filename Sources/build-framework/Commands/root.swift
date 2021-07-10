@@ -5,6 +5,7 @@ import ArgumentParser
 import CLTLogger
 import Logging
 import XcodeTools
+import XibLoc
 
 
 
@@ -144,6 +145,7 @@ struct BuildFramework : ParsableCommand {
 		/* Create all the frameworks and related needed to create the final static
 		 * and dynamic xcframeworks. */
 		var frameworks = [FilePath]()
+		var librariesAndHeadersDir = [(library: FilePath, headersDir: FilePath)]()
 		for (platformAndSdk, targets) in targetsByPlatformAndSdks {
 			let firstTarget = targets.first! /* Safe because of the way targetsByPlatformAndSdks is built. */
 			
@@ -218,9 +220,16 @@ struct BuildFramework : ParsableCommand {
 			/* Create the umbrella header for the dynamic framework. */
 			let dynamicUmbrellaHeader: FilePath
 			do {
-				let unbuiltUmbrellaHeader = UnbuiltUmbrellaHeader(headers: mergedHeaders, productName: buildPaths.productName, skipExistingArtifacts: skipExistingArtifacts)
+				let unbuiltUmbrellaHeader = UnbuiltUmbrellaHeader(headers: mergedHeaders, productName: buildPaths.productName, modularImports: true, skipExistingArtifacts: skipExistingArtifacts)
 				dynamicUmbrellaHeader = FilePath(buildPaths.productName + ".h")
 				try unbuiltUmbrellaHeader.buildUmbrellaHeader(at: buildPaths.mergedDynamicHeadersDir.appending(platformAndSdk.pathComponent).pushing(dynamicUmbrellaHeader))
+			}
+			/* Create the umbrella header for the dynamic framework. */
+			let staticUmbrellaHeader: FilePath
+			do {
+				let unbuiltUmbrellaHeader = UnbuiltUmbrellaHeader(headers: mergedHeaders, productName: buildPaths.productName, modularImports: false, skipExistingArtifacts: skipExistingArtifacts)
+				staticUmbrellaHeader = FilePath(buildPaths.productName + ".h")
+				try unbuiltUmbrellaHeader.buildUmbrellaHeader(at: buildPaths.mergedStaticHeadersDir.appending(platformAndSdk.pathComponent).pushing(staticUmbrellaHeader))
 			}
 			
 			/* Create FAT static libs, one per lib */
@@ -239,6 +248,21 @@ struct BuildFramework : ParsableCommand {
 				fatStaticLib = buildPaths.mergedFatStaticLibsDir.appending(platformAndSdk.pathComponent).appending(buildPaths.staticLibProductNameComponent)
 				try unbuiltMergedStaticLib.buildMergedLib(at: fatStaticLib)
 			}
+			
+			/* Install the module.modulemap file for the static lib */
+			do {
+				let destPath = buildPaths.mergedStaticHeadersDir.appending(platformAndSdk.pathComponent).appending("module.modulemap")
+				if skipExistingArtifacts && Config.fm.fileExists(atPath: destPath.string) {
+					Config.logger.info("Skipping creation of \(destPath) because it already exists")
+				} else {
+					let filecontent = try String(contentsOf: buildPaths.templatesDir.appending("static-lib/module.modulemap.xibloc").url)
+					try filecontent.applying(xibLocInfo: Str2StrXibLocInfo(replacements: ["|": buildPaths.productName])!)
+						.write(to: destPath.url, atomically: false, encoding: .utf8)
+				}
+			}
+			
+			/* Nothing else to build for the static framework, we register it. */
+			librariesAndHeadersDir.append((library: fatStaticLib, headersDir: buildPaths.mergedStaticHeadersDir.appending(platformAndSdk.pathComponent)))
 			
 			/* Create FAT dylib from the dylibs generated earlier */
 			let fatDynamicLib: FilePath
@@ -279,7 +303,7 @@ struct BuildFramework : ParsableCommand {
 						mergedHeaders.map{ (root: buildPaths.mergedDynamicHeadersDir.appending(platformAndSdk.pathComponent), file: $0) } +
 						[(root: buildPaths.mergedDynamicHeadersDir.appending(platformAndSdk.pathComponent), file: dynamicUmbrellaHeader)]
 					),
-					modules: [(root: buildPaths.templatesDir, file: "module.modulemap.xibloc")],
+					modules: [(root: buildPaths.templatesDir.appending("dynamic-lib"), file: "module.modulemap.xibloc")],
 					resources: [],
 					skipExistingArtifacts: skipExistingArtifacts
 				)
@@ -287,6 +311,12 @@ struct BuildFramework : ParsableCommand {
 				try unbuiltFramework.buildFramework(at: frameworkPath)
 			}
 			frameworks.append(frameworkPath)
+		}
+		
+		/* Build the static XCFramework */
+		do {
+			let unbuiltXCFramework = UnbuiltStaticXCFramework(librariesAndHeadersDir: librariesAndHeadersDir, skipExistingArtifacts: skipExistingArtifacts)
+			try unbuiltXCFramework.buildXCFramework(at: buildPaths.resultXCFrameworkStatic)
 		}
 		
 		/* Build the dynamic XCFramework */
