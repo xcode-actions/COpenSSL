@@ -37,6 +37,11 @@ struct BuildPaths {
 	let libObjectsDir: FilePath
 	/** The dylibs created from the `libObjectsDir`. */
 	let dylibsDir: FilePath
+	/** Contains the headers from Target merged into platform+sdk tuble.
+	 
+	 Sometimes the headers are not exactly the same between architectures, so we
+	 have to merge them in order to get the correct headers all the time. */
+	let mergedHeadersDir: FilePath
 	/** Contains the libs from previous step, but merged as one.
 	 
 	 We have to do this because xcodebuild does not do it automatically when
@@ -103,8 +108,9 @@ struct BuildPaths {
 		self.libObjectsDir = self.buildDir.appending("step3.lib-derivatives/lib-objects")
 		self.dylibsDir     = self.buildDir.appending("step3.lib-derivatives/merged-dynamic-libs")
 		
-		self.mergedFatStaticLibsDir  = self.buildDir.appending("step4.merged-fat-libs/static")
-		self.mergedFatDynamicLibsDir = self.buildDir.appending("step4.merged-fat-libs/dynamic")
+		self.mergedHeadersDir        = self.buildDir.appending("step4.merged-products/headers")
+		self.mergedFatStaticLibsDir  = self.buildDir.appending("step4.merged-products/static")
+		self.mergedFatDynamicLibsDir = self.buildDir.appending("step4.merged-products/dynamic")
 		
 		self.finalFrameworksDir           = self.buildDir.appending("step5.final-frameworks-and-libs/frameworks")
 		self.finalStaticLibsAndHeadersDir = self.buildDir.appending("step5.final-frameworks-and-libs/static-libs-and-headers")
@@ -127,6 +133,7 @@ struct BuildPaths {
 		try Config.fm.ensureDirectory(path: libObjectsDir)
 		try Config.fm.ensureDirectory(path: dylibsDir)
 		
+		try Config.fm.ensureDirectory(path: mergedHeadersDir)
 		try Config.fm.ensureDirectory(path: mergedFatStaticLibsDir)
 		try Config.fm.ensureDirectory(path: mergedFatDynamicLibsDir)
 		

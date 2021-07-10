@@ -9,6 +9,10 @@ struct UnbuiltMergedStaticLib {
 	var skipExistingArtifacts: Bool
 	
 	func buildMergedLib(at destPath: FilePath) throws {
+		guard libs.count > 0 else {
+			Config.logger.warning("Asked to create a merged static lib at path \(destPath), but no libs given.")
+			return
+		}
 		guard !skipExistingArtifacts || !Config.fm.fileExists(atPath: destPath.string) else {
 			Config.logger.info("Skipping creation of \(destPath) because it already exists")
 			return

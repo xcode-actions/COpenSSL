@@ -143,6 +143,7 @@ struct BuildFramework : ParsableCommand {
 		
 		/* Create all the frameworks and related needed to create the final static
 		 * and dynamic xcframeworks. */
+		var frameworks = [FilePath]()
 		for (platformAndSdk, targets) in targetsByPlatformAndSdks {
 			let firstTarget = targets.first! /* Safe because of the way targetsByPlatformAndSdks is built. */
 			
@@ -176,6 +177,25 @@ struct BuildFramework : ParsableCommand {
 						currentTarget: target, currentLibs: currentBuiltTarget.staticLibraries
 					)
 				}
+			}
+			
+			/* Merge the headers and drop the “include” path component */
+			var mergedHeaders = [FilePath]()
+			for header in builtTarget.headers {
+				/* Correct way to do this is lines below, but crashes for now. */
+//				guard header.components.first?.string == "include" else {
+//					Config.logger.warning("Got a header not in “include” dir. Skipping.")
+//					continue
+//				}
+//				let headerNoInclude = FilePath(root: nil, header.components.dropFirst())
+				guard header.string.starts(with: "include/") else {
+					Config.logger.warning("Got a header not in “include” dir. Skipping.")
+					continue
+				}
+				let headerNoInclude = FilePath(String(header.string.dropFirst("include/".count)))
+				let unmergedHeader = UnmergedHeader(headersAndArchs: targets.map{ (buildPaths.installDir(for: $0).pushing(header), $0.arch) }, skipExistingArtifacts: skipExistingArtifacts)
+				try unmergedHeader.mergeHeaders(at: buildPaths.mergedHeadersDir.appending(platformAndSdk.pathComponent).pushing(headerNoInclude))
+				mergedHeaders.append(headerNoInclude)
 			}
 			
 			/* Create FAT static libs, one per lib */
@@ -230,7 +250,7 @@ struct BuildFramework : ParsableCommand {
 						minimumOSVersion: minimumOSVersion
 					),
 					libPath: fatDynamicLib,
-					headers: (root: builtTarget.installFolder, files: builtTarget.headers),
+					headers: (root: buildPaths.mergedHeadersDir.appending(platformAndSdk.pathComponent), files: mergedHeaders),
 					modules: nil,
 					resources: nil,
 					skipExistingArtifacts: skipExistingArtifacts
