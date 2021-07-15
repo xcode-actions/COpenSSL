@@ -6,7 +6,6 @@ import Logging
 
 
 /** All the paths relevant to the build */
-@available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
 struct BuildPaths {
 	
 	/** Not really a path, but hella convenient to have here */

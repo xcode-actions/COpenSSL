@@ -5,7 +5,6 @@ import ArgumentParser
 
 
 
-@available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
 struct Target : Hashable, ExpressibleByArgument, CustomStringConvertible {
 	
 	var sdk: String
@@ -48,7 +47,6 @@ struct Target : Hashable, ExpressibleByArgument, CustomStringConvertible {
 }
 
 
-@available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
 extension Target {
 	
 	static func platformLegacyName(fromPlatform platform: String) -> String {

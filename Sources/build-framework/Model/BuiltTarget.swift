@@ -8,7 +8,6 @@ import SystemPackage
 
 typealias FilePath = System.FilePath
 
-@available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
 struct BuiltTarget {
 	
 	var target: Target
@@ -106,7 +105,6 @@ struct BuiltTarget {
 
 /* Utilities. Not sure it makes a lot of sense to have these functions here, but
  * I don’t really know where to put them. */
-@available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
 extension BuiltTarget {
 	
 	enum MultipleSdkVersionsResolution {

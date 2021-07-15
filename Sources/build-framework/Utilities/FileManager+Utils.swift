@@ -3,7 +3,6 @@ import System
 
 
 
-@available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
 extension FileManager {
 	
 	func ensureDirectory(path: FilePath) throws {

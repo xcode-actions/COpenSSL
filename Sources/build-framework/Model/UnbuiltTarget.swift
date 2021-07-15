@@ -5,7 +5,6 @@ import Logging
 
 
 
-@available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
 struct UnbuiltTarget {
 	
 	var target: Target

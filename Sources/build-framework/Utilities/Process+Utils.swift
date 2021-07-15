@@ -10,7 +10,6 @@ import XcodeTools
 
 public typealias FileDescriptor = System.FileDescriptor
 
-@available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
 extension Process {
 	
 	public static func logProcessOutputFactory(logLevel: Logger.Level = .debug) -> (String, SystemPackage.FileDescriptor) -> Void {

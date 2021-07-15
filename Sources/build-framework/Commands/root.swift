@@ -10,7 +10,6 @@ import XibLoc
 
 
 @main
-@available(macOS 12.0, *) // TODO: Remove when v12 exists in Package.swift
 struct BuildFramework : ParsableCommand {
 	
 	@Option(help: "The path to the “Files” directory, containing some resources to build OpenSSL.")
