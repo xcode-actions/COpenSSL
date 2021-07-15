@@ -48,8 +48,6 @@ struct Tarball {
 		self.stem = component.string
 	}
 	
-	/* TODO: At some point in the future, the Logger will probably be retrievable
-	 *       from the current Task context. For now, we pass it along. */
 	func ensureDownloaded() async throws {
 		if Config.fm.fileExists(atPath: localPath.string), try checkShasum(path: localPath) {
 			/* File exists and already has correct checksum (or checksum is not checked) */
