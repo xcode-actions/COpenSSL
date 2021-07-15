@@ -256,7 +256,7 @@ extension BuiltTarget {
 				outputHandler: outputHandler
 			)
 			if localFoundLLVM && !foundBitcode {
-				Config.logger.warning("__LLVM found in \(lib.string), but __bitcode was not (of lib is dynamic this is expected though)")
+				Config.logger.warning("__LLVM found in \(lib.string), but __bitcode was not (if lib is dynamic this is expected)")
 			}
 			if foundBitcode {
 				break
