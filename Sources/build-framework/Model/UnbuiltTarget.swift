@@ -68,11 +68,11 @@ struct UnbuiltTarget {
 		setenv("OPENSSLBUILD_SDKs_LOCATION", buildPaths.developerDir.appending("Platforms").appending(platformPathComponent).appending("Developer").string, 1)
 		setenv("OPENSSLBUILD_SDK",           sdkPathComponent.string, 1)
 		setenv("OPENSSL_LOCAL_CONFIG_DIR",   opensslConfigDir.string, 1)
-		if let sdkVersion = sdkVersion {setenv("OPENSSLBUILD_SDKVERSION", sdkVersion, 1)}
+		if let sdkVersion = sdkVersion {  setenv("OPENSSLBUILD_SDKVERSION", sdkVersion, 1)}
 		else                           {unsetenv("OPENSSLBUILD_SDKVERSION")}
-		if let minSDKVersion = minSDKVersion {setenv("OPENSSLBUILD_MIN_SDKVERSION", minSDKVersion, 1)}
+		if let minSDKVersion = minSDKVersion {  setenv("OPENSSLBUILD_MIN_SDKVERSION", minSDKVersion, 1)}
 		else                                 {unsetenv("OPENSSLBUILD_MIN_SDKVERSION")}
-		if disableBitcode {setenv("OPENSSLBUILD_DISABLE_BITCODE", "true", 1)}
+		if disableBitcode {  setenv("OPENSSLBUILD_DISABLE_BITCODE", "true", 1)}
 		else              {unsetenv("OPENSSLBUILD_DISABLE_BITCODE")}
 		let configArgs = [
 			target.openSSLConfigName,
