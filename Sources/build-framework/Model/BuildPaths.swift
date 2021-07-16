@@ -43,7 +43,8 @@ struct BuildPaths {
 	 have to merge them in order to get the correct headers all the time. Also
 	 the headers have to be patched to be able to be used in an XCFramework. */
 	let mergedStaticHeadersDir: FilePath
-	/** Contains the libs from previous step, but merged as one.
+	/**
+	 Contains the libs from previous step, but merged as one.
 	 
 	 We have to do this because xcodebuild does not do it automatically when
 	 building an xcframework (this is understandable) and xcframeworks do not
@@ -69,7 +70,7 @@ struct BuildPaths {
 	 variable is not strictly relevant. */
 	let mergedFatDynamicLibsDir: FilePath
 	
-	/** Contains theh final frameworks from which the dynamic xcframework will be
+	/** Contains the final frameworks from which the dynamic xcframework will be
 	 built. */
 	let finalFrameworksDir: FilePath
 	/** Contains the final full static lib install (with headers) from which
