@@ -64,6 +64,8 @@ struct UnbuiltTarget {
 			struct InternalError : Error {}
 			throw InternalError()
 		}
+		/* We should change the env via the Process APIs so that only the children
+		 * has a different env, but our conveniences don’t know these APIs. */
 		setenv("CROSS_COMPILE",              buildPaths.developerDir.appending("Toolchains/XcodeDefault.xctoolchain/usr/bin").string + "/", 1)
 		setenv("OPENSSLBUILD_SDKs_LOCATION", buildPaths.developerDir.appending("Platforms").appending(platformPathComponent).appending("Developer").string, 1)
 		setenv("OPENSSLBUILD_SDK",           sdkPathComponent.string, 1)
