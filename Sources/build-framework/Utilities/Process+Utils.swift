@@ -53,7 +53,10 @@ extension Process {
 	) throws -> String {
 		var stdout = ""
 		let outputHandler: (String, SystemPackage.FileDescriptor) -> Void = { line, fd in
-			assert(fd == .standardOutput)
+			guard fd == .standardOutput else {
+				Config.logger.debug("stderr: \(line.trimmingCharacters(in: .newlines))")
+				return
+			}
 			stdout += line
 		}
 		let (terminationStatus, terminationReason) = try spawnAndStream(

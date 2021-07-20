@@ -17,6 +17,10 @@ struct BuildPaths {
 	let resultXCFrameworkStatic: FilePath
 	let resultXCFrameworkDynamic: FilePath
 	
+	let resultPackageSwift: FilePath
+	let resultXCFrameworkStaticArchive: FilePath
+	let resultXCFrameworkDynamicArchive: FilePath
+	
 	let developerDir: FilePath
 	
 	let opensslConfigsDir: FilePath
@@ -109,6 +113,10 @@ struct BuildPaths {
 		self.frameworkProductNameComponent = frameworkProductNameComponent
 		self.resultXCFrameworkStatic  = self.resultDir.appending(staticXCFrameworkComponent)
 		self.resultXCFrameworkDynamic = self.resultDir.appending(dynamicXCFrameworkComponent)
+		
+		self.resultPackageSwift = self.resultDir.appending("Package.swift")
+		self.resultXCFrameworkStaticArchive  = self.resultDir.appending( staticXCFrameworkComponent.string + ".zip")
+		self.resultXCFrameworkDynamicArchive = self.resultDir.appending(dynamicXCFrameworkComponent.string + ".zip")
 		
 		self.sourcesDir  = self.buildDir.appending("step1.sources-and-builds")
 		self.installsDir = self.buildDir.appending("step2.installs")
