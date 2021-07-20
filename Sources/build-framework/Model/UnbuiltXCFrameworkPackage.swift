@@ -81,7 +81,7 @@ struct UnbuiltXCFrameworkPackage {
 			let checksum = checksums[type]!
 			if let checksum = checksum {
 				/* TODO: Customize URL */
-				return #"\#t\#t.binaryTarget(name: "\#(buildPaths.productName)-\#(type)", url: "https://github.com/xcode-actions/\#(buildPaths.productName)/releases/download/\#(version!)/\#(buildPaths.productName)-\#(type).xcframework.zip", checksum: "\#(checksum)")"#
+				return #"\#t\#t.binaryTarget(name: "\#(buildPaths.productName)-\#(type)", url: "https://github.com/xcode-actions/\#(buildPaths.productName)/releases/download/\#(BuiltTarget.normalizedOpenSSLVersion(version!))/\#(buildPaths.productName)-\#(type).xcframework.zip", checksum: "\#(checksum)")"#
 			} else {
 				return #"\#t\#t.binaryTarget(name: "\#(buildPaths.productName)-\#(type)", path: "./\#(buildPaths.productName)-\#(type).xcframework")"#
 			}
