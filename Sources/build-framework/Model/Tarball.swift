@@ -59,12 +59,10 @@ struct Tarball {
 				struct InvalidURLResponse : Error {var response: URLResponse}
 				throw InvalidURLResponse(response: urlResponse)
 			}
-			/* At some point in the future, FilePath(tmpFileURL) will be possible
-			 * (it is already possible when importing System instead of
-			 * SystemPackage actually). This init might return nil, so the
-			 * tmpFilePath variable would have to be set in the guard above. */
-			assert(tmpFileURL.isFileURL)
-			let tmpFilePath = FilePath(tmpFileURL.path)
+			guard let tmpFilePath = FilePath(tmpFileURL) else {
+				struct InvalidTmpFileURL : Error {var url: URL}
+				throw InvalidTmpFileURL(url: tmpFileURL)
+			}
 			guard try checkShasum(path: tmpFilePath) else {
 				struct InvalidChecksumForDownloadedTarball : Error {}
 				throw InvalidChecksumForDownloadedTarball()
