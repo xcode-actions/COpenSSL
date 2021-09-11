@@ -97,6 +97,22 @@ struct BuildFramework : ParsableCommand {
 	@Option(name: .customLong("tvos-min-sdk-version"))
 	var tvOSMinSDKVersion: String?
 	
+	/* NOASYNCINARGPARSER START --------- */
+	func run() throws {
+		/* While swift-argument-parser does not compile w/ Xcode on async branch. */
+		class ErrWrapper {var err: Error?}
+		let errw = ErrWrapper()
+		let group = DispatchGroup()
+		group.enter()
+		Task{do{
+			try await self.run()
+			group.leave()
+		} catch {errw.err = error; group.leave()}}
+		group.wait()
+		if let e = errw.err {throw e}
+	}
+	/* NOASYNCINARGPARSER STOP --------- */
+	
 	func run() async throws {
 		LoggingSystem.bootstrap{ _ in CLTLogger() }
 		XcodeTools.XcodeToolsConfig.logger?.logLevel = .warning
