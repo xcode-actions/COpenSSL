@@ -77,7 +77,7 @@ struct Tarball {
 	func extract(in folder: FilePath) async throws -> FilePath {
 		try Config.fm.ensureDirectory(path: folder)
 		try await ProcessInvocation("tar", "xf", localPath.string, "-C", folder.string)
-			.invokeAndStreamOutput{ line, _, _ in Config.logger.info("tar: fd=\(line.fd): \(line.strLineOrHex())") }
+			.invokeAndStreamOutput{ line, _, _ in Config.logger.debug("tar: fd=\(line.fd.rawValue): \(line.strLineOrHex())") }
 		
 		var isDir = ObjCBool(false)
 		let extractedTarballDir = folder.appending(stem)

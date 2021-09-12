@@ -117,7 +117,7 @@ struct UnbuiltFramework {
 		/* Renaming the lib */
 		Config.logger.info("Updating install name of dylib at \(installedLibPath)")
 		try await ProcessInvocation("/usr/bin/xcrun", "install_name_tool", "-id", "@rpath/\(frameworkPathComponent.string)/\(binaryPathComponent.string)", installedLibPath.string)
-			.invokeAndStreamOutput{ line, _, _ in Config.logger.info("install_name_tool: fd=\(line.fd): \(line.strLineOrHex())") }
+			.invokeAndStreamOutput{ line, _, _ in Config.logger.debug("install_name_tool: fd=\(line.fd.rawValue): \(line.strLineOrHex())") }
 		
 		/* Create the Info.plist */
 		try Config.fm.ensureDirectory(path: infoplistPath.removingLastComponent())

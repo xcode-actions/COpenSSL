@@ -30,8 +30,8 @@ struct UnbuiltXCFrameworkPackage {
 			/* TODO: Do not force unwrap here */
 			let pi1 = ProcessInvocation("zip", "-r", "--symlinks", buildPaths.resultXCFrameworkStaticArchive.string,  buildPaths.resultXCFrameworkStatic.lastComponent!.string)
 			let pi2 = ProcessInvocation("zip", "-r", "--symlinks", buildPaths.resultXCFrameworkDynamicArchive.string, buildPaths.resultXCFrameworkDynamic.lastComponent!.string)
-			try await pi1.invokeAndStreamOutput{ line, _, _ in Config.logger.info("zip: fd=\(line.fd): \(line.strLineOrHex())") }
-			try await pi2.invokeAndStreamOutput{ line, _, _ in Config.logger.info("zip: fd=\(line.fd): \(line.strLineOrHex())") }
+			try await pi1.invokeAndStreamOutput{ line, _, _ in Config.logger.debug("zip: fd=\(line.fd.rawValue): \(line.strLineOrHex())") }
+			try await pi2.invokeAndStreamOutput{ line, _, _ in Config.logger.debug("zip: fd=\(line.fd.rawValue): \(line.strLineOrHex())") }
 		}
 		
 		/* Write the package once, without checksums */

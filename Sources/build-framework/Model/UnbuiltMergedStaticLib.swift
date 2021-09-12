@@ -23,7 +23,7 @@ struct UnbuiltMergedStaticLib {
 		
 		Config.logger.info("Merging \(libs.count) lib(s) to \(destPath)")
 		try await ProcessInvocation("/usr/bin/xcrun", args: ["libtool", "-static", "-o", destPath.string] + libs.map{ $0.string })
-			.invokeAndStreamOutput{ line, _, _ in Config.logger.info("libtool: fd=\(line.fd): \(line.strLineOrHex())") }
+			.invokeAndStreamOutput{ line, _, _ in Config.logger.debug("libtool: fd=\(line.fd.rawValue): \(line.strLineOrHex())") }
 	}
 	
 }

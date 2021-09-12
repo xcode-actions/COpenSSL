@@ -60,7 +60,7 @@ struct BuiltTarget {
 		for staticLibPath in absoluteStaticLibrariesPaths {
 			Config.logger.info("Extracting \(staticLibPath) to \(destinationDir)")
 			try await ProcessInvocation("ar", "-x", staticLibPath.string)
-				.invokeAndStreamOutput{ line, _, _ in Config.logger.info("ar: fd=\(line.fd): \(line.strLineOrHex())") }
+				.invokeAndStreamOutput{ line, _, _ in Config.logger.debug("ar: fd=\(line.fd.rawValue): \(line.strLineOrHex())") }
 		}
 	}
 	
@@ -91,7 +91,7 @@ struct BuiltTarget {
 			"-compatibility_version", Self.normalizedOpenSSLVersion(opensslVersion), /* Not true, but we do not care; the resulting lib will be in a framework which will be embedded in the app and not reused 99.99% of the time, so… */
 			"-current_version", Self.normalizedOpenSSLVersion(opensslVersion),
 			"-o", destination.string
-		]).invokeAndStreamOutput{ line, _, _ in Config.logger.info("ld: fd=\(line.fd): \(line.strLineOrHex())") }
+		]).invokeAndStreamOutput{ line, _, _ in Config.logger.debug("ld: fd=\(line.fd.rawValue): \(line.strLineOrHex())") }
 		return destination
 	}
 	

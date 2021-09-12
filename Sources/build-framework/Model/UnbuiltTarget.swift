@@ -86,15 +86,15 @@ struct UnbuiltTarget {
 			"no-tests"
 		] + (target.arch.hasSuffix("64") ? ["enable-ec_nistp_64_gcc_128"] : [])
 		try await ProcessInvocation(SystemPackage.FilePath(extractedTarballDir.appending("Configure").string), args: configArgs)
-			.invokeAndStreamOutput{ line, _, _ in Config.logger.info("Configure: fd=\(line.fd): \(line.strLineOrHex())") }
+			.invokeAndStreamOutput{ line, _, _ in Config.logger.debug("Configure: fd=\(line.fd.rawValue): \(line.strLineOrHex())") }
 		
 		/* *** Build *** */
 		try await ProcessInvocation("make", args: multicoreMakeOption)
-			.invokeAndStreamOutput{ line, _, _ in Config.logger.info("make: fd=\(line.fd): \(line.strLineOrHex())") }
+			.invokeAndStreamOutput{ line, _, _ in Config.logger.debug("make: fd=\(line.fd.rawValue): \(line.strLineOrHex())") }
 		
 		/* *** Install *** */
 		try await ProcessInvocation("make", args: ["install_sw"] + multicoreMakeOption)
-			.invokeAndStreamOutput{ line, _, _ in Config.logger.info("make install_sw: fd=\(line.fd): \(line.strLineOrHex())") }
+			.invokeAndStreamOutput{ line, _, _ in Config.logger.debug("make install_sw: fd=\(line.fd.rawValue): \(line.strLineOrHex())") }
 	}
 	
 	private func retrieveArtifacts() throws -> (headers: [FilePath], staticLibs: [FilePath]) {

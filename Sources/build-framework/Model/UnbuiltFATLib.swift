@@ -23,7 +23,7 @@ struct UnbuiltFATLib {
 		
 		Config.logger.info("Creating FAT lib \(destPath) from \(libs.count) lib(s)")
 		try await ProcessInvocation("lipo", args: ["-create"] + libs.map{ $0.string } + ["-output", destPath.string])
-			.invokeAndStreamOutput{ line, _, _ in Config.logger.info("lipo: fd=\(line.fd): \(line.strLineOrHex())") }
+			.invokeAndStreamOutput{ line, _, _ in Config.logger.debug("lipo: fd=\(line.fd.rawValue): \(line.strLineOrHex())") }
 	}
 	
 }

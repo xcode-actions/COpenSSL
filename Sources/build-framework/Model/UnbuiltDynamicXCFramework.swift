@@ -23,7 +23,7 @@ struct UnbuiltDynamicXCFramework {
 		try Config.fm.ensureDirectoryDeleted(path: destPath)
 		
 		try await ProcessInvocation("xcodebuild", args: ["-create-xcframework"] + frameworks.flatMap{ ["-framework", $0.string] } + ["-output", destPath.string])
-			.invokeAndStreamOutput{ line, _, _ in Config.logger.info("xcodebuild: fd=\(line.fd): \(line.strLineOrHex())") }
+			.invokeAndStreamOutput{ line, _, _ in Config.logger.debug("xcodebuild: fd=\(line.fd.rawValue): \(line.strLineOrHex())") }
 	}
 	
 }
