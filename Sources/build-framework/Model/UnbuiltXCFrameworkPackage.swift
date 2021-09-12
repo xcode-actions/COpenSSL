@@ -1,5 +1,7 @@
 import Foundation
 
+import XcodeTools
+
 
 
 struct UnbuiltXCFrameworkPackage {
@@ -7,7 +9,7 @@ struct UnbuiltXCFrameworkPackage {
 	var buildPaths: BuildPaths
 	var skipExistingArtifacts: Bool
 	
-	func buildXCFrameworkPackage(opensslVersion: String) throws {
+	func buildXCFrameworkPackage(opensslVersion: String) async throws {
 		let artifacts = [buildPaths.resultPackageSwift, buildPaths.resultXCFrameworkStaticArchive, buildPaths.resultXCFrameworkDynamicArchive]
 		guard !skipExistingArtifacts || !artifacts.reduce(true, { $0 && Config.fm.fileExists(atPath: $1.string) }) else {
 			Config.logger.info("Skipping creation of \(artifacts) because they already exists")
@@ -26,8 +28,10 @@ struct UnbuiltXCFrameworkPackage {
 			defer {Config.fm.changeCurrentDirectoryPath(previousCwd)}
 			
 			/* TODO: Do not force unwrap here */
-			try Process.spawnAndStreamEnsuringSuccess("/usr/bin/zip", args: ["-r", "--symlinks", buildPaths.resultXCFrameworkStaticArchive.string,  buildPaths.resultXCFrameworkStatic.lastComponent!.string],  outputHandler: Process.logProcessOutputFactory())
-			try Process.spawnAndStreamEnsuringSuccess("/usr/bin/zip", args: ["-r", "--symlinks", buildPaths.resultXCFrameworkDynamicArchive.string, buildPaths.resultXCFrameworkDynamic.lastComponent!.string], outputHandler: Process.logProcessOutputFactory())
+			let pi1 = ProcessInvocation("zip", "-r", "--symlinks", buildPaths.resultXCFrameworkStaticArchive.string,  buildPaths.resultXCFrameworkStatic.lastComponent!.string)
+			let pi2 = ProcessInvocation("zip", "-r", "--symlinks", buildPaths.resultXCFrameworkDynamicArchive.string, buildPaths.resultXCFrameworkDynamic.lastComponent!.string)
+			try await pi1.invokeAndStreamOutput{ line, _, _ in Config.logger.info("zip: fd=\(line.fd): \(line.strLineOrHex())") }
+			try await pi2.invokeAndStreamOutput{ line, _, _ in Config.logger.info("zip: fd=\(line.fd): \(line.strLineOrHex())") }
 		}
 		
 		/* Write the package once, without checksums */
@@ -42,8 +46,9 @@ struct UnbuiltXCFrameworkPackage {
 			defer {Config.fm.changeCurrentDirectoryPath(previousCwd)}
 			
 			/* Compute checksums */
-			checksums["static"]  = try Process.spawnAndGetOutput("/usr/bin/swift", args: ["package", "compute-checksum", buildPaths.resultXCFrameworkStaticArchive.string]).trimmingCharacters(in: .whitespacesAndNewlines)
-			checksums["dynamic"] = try Process.spawnAndGetOutput("/usr/bin/swift", args: ["package", "compute-checksum", buildPaths.resultXCFrameworkDynamicArchive.string]).trimmingCharacters(in: .whitespacesAndNewlines)
+			struct MoreThanOneLineOfOutput : Error {}
+			checksums["static"]  = try await ProcessInvocation("swift", "package", "compute-checksum", buildPaths.resultXCFrameworkStaticArchive.string).invokeAndGetStdout().onlyElement.get(orThrow: MoreThanOneLineOfOutput())
+			checksums["dynamic"] = try await ProcessInvocation("swift", "package", "compute-checksum", buildPaths.resultXCFrameworkDynamicArchive.string).invokeAndGetStdout().onlyElement.get(orThrow: MoreThanOneLineOfOutput())
 		}
 		
 		/* Rewrite Package.swift file for remote xcframework */

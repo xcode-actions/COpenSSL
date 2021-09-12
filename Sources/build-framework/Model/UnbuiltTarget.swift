@@ -2,6 +2,8 @@ import Foundation
 import System
 
 import Logging
+import SystemPackage
+import XcodeTools
 
 
 
@@ -19,16 +21,16 @@ struct UnbuiltTarget {
 	
 	var skipExistingArtifacts: Bool
 	
-	func buildTarget() throws -> BuiltTarget {
+	func buildTarget() async throws -> BuiltTarget {
 		let sourceDir = buildPaths.sourceDir(for: target)
 		let installDir = buildPaths.installDir(for: target)
-		try extractTarballBuildAndInstallIfNeeded(installDir: installDir, sourceDir: sourceDir)
+		try await extractTarballBuildAndInstallIfNeeded(installDir: installDir, sourceDir: sourceDir)
 		
 		let (headers, staticLibs) = try retrieveArtifacts()
 		return BuiltTarget(target: target, sourceFolder: sourceDir, installFolder: installDir, staticLibraries: staticLibs, dynamicLibraries: [], headers: headers, resources: [])
 	}
 	
-	private func extractTarballBuildAndInstallIfNeeded(installDir: FilePath, sourceDir: FilePath) throws {
+	private func extractTarballBuildAndInstallIfNeeded(installDir: FilePath, sourceDir: FilePath) async throws {
 		let opensslConfigDir = try buildPaths.opensslConfigsDir(for: opensslVersion)
 		
 		guard !skipExistingArtifacts || !Config.fm.fileExists(atPath: installDir.string) else {
@@ -41,7 +43,7 @@ struct UnbuiltTarget {
 		/* Extract tarball in source directory. If the tarball was already there,
 		 * tar will overwrite existing files (but will not remove additional
 		 * files). */
-		let extractedTarballDir = try tarball.extract(in: sourceDir)
+		let extractedTarballDir = try await tarball.extract(in: sourceDir)
 		
 		/* ********* BUILD & INSTALL ********* */
 		
@@ -83,13 +85,16 @@ struct UnbuiltTarget {
 			"no-shared",
 			"no-tests"
 		] + (target.arch.hasSuffix("64") ? ["enable-ec_nistp_64_gcc_128"] : [])
-		try Process.spawnAndStreamEnsuringSuccess(extractedTarballDir.appending("Configure").string, args: configArgs, outputHandler: Process.logProcessOutputFactory())
+		try await ProcessInvocation(SystemPackage.FilePath(extractedTarballDir.appending("Configure").string), args: configArgs)
+			.invokeAndStreamOutput{ line, _, _ in Config.logger.info("Configure: fd=\(line.fd): \(line.strLineOrHex())") }
 		
 		/* *** Build *** */
-		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/xcrun", args: ["make"] + multicoreMakeOption, outputHandler: Process.logProcessOutputFactory())
+		try await ProcessInvocation("make", args: multicoreMakeOption)
+			.invokeAndStreamOutput{ line, _, _ in Config.logger.info("make: fd=\(line.fd): \(line.strLineOrHex())") }
 		
 		/* *** Install *** */
-		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/xcrun", args: ["make", "install_sw"] + multicoreMakeOption, outputHandler: Process.logProcessOutputFactory())
+		try await ProcessInvocation("make", args: ["install_sw"] + multicoreMakeOption)
+			.invokeAndStreamOutput{ line, _, _ in Config.logger.info("make install_sw: fd=\(line.fd): \(line.strLineOrHex())") }
 	}
 	
 	private func retrieveArtifacts() throws -> (headers: [FilePath], staticLibs: [FilePath]) {

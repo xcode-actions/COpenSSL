@@ -3,6 +3,7 @@ import Foundation
 import System
 
 import Logging
+import XcodeTools
 import XibLoc
 
 
@@ -73,9 +74,10 @@ struct Tarball {
 		}
 	}
 	
-	func extract(in folder: FilePath) throws -> FilePath {
+	func extract(in folder: FilePath) async throws -> FilePath {
 		try Config.fm.ensureDirectory(path: folder)
-		try Process.spawnAndStreamEnsuringSuccess("/usr/bin/tar", args: ["xf", localPath.string, "-C", folder.string], outputHandler: Process.logProcessOutputFactory())
+		try await ProcessInvocation("tar", "xf", localPath.string, "-C", folder.string)
+			.invokeAndStreamOutput{ line, _, _ in Config.logger.info("tar: fd=\(line.fd): \(line.strLineOrHex())") }
 		
 		var isDir = ObjCBool(false)
 		let extractedTarballDir = folder.appending(stem)

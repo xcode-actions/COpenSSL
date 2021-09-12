@@ -6,8 +6,8 @@
         "repositoryURL": "https://github.com/xcode-actions/clt-logger.git",
         "state": {
           "branch": null,
-          "revision": "150eaf2c84c2a161b9c40cd3c1b04b51884b8029",
-          "version": "0.3.5"
+          "revision": "5d3db055e9db2827136c1acf335e136fe759917e",
+          "version": "0.3.6"
         }
       },
       {
@@ -24,8 +24,8 @@
         "repositoryURL": "https://github.com/xcode-actions/stream-reader.git",
         "state": {
           "branch": null,
-          "revision": "ee2df594d840f03ddd9b35c7748f2eac212463d6",
-          "version": "3.2.2"
+          "revision": "09104092cb7e87dc6d1086d40c06d7606fc6cb94",
+          "version": "3.2.3"
         }
       },
       {
@@ -33,8 +33,17 @@
         "repositoryURL": "https://github.com/apple/swift-argument-parser.git",
         "state": {
           "branch": null,
-          "revision": "6b2aa2748a7881eebb9f84fb10c01293e15b52ca",
-          "version": "0.5.0"
+          "revision": "fd4c3b68a0c04c4c6cda27f0213c3703d50080e8",
+          "version": "1.0.0"
+        }
+      },
+      {
+        "package": "swift-crypto",
+        "repositoryURL": "https://github.com/apple/swift-crypto.git",
+        "state": {
+          "branch": null,
+          "revision": "3bea268b223651c4ab7b7b9ad62ef9b2d4143eb6",
+          "version": "1.1.6"
         }
       },
       {
@@ -51,8 +60,8 @@
         "repositoryURL": "https://github.com/xcode-actions/swift-signal-handling.git",
         "state": {
           "branch": null,
-          "revision": "1fd84e624b31161307490e454347ce1535b646bb",
-          "version": "0.2.0"
+          "revision": "6005fac2f6da1c8afa53c2e996e5dff92e334b43",
+          "version": "1.0.0"
         }
       },
       {
@@ -60,17 +69,17 @@
         "repositoryURL": "https://github.com/apple/swift-system.git",
         "state": {
           "branch": null,
-          "revision": "39774ef16a6d91dee6f666b940e00ea202710cf7",
-          "version": "0.0.3"
+          "revision": "ce8b4910730114fa1eb46967a031a04f7594f42d",
+          "version": "1.0.0"
         }
       },
       {
         "package": "XcodeTools",
         "repositoryURL": "https://github.com/xcode-actions/XcodeTools.git",
         "state": {
-          "branch": null,
-          "revision": "94b8c7ee88de106625357966b151d30220e7f2fb",
-          "version": "0.3.5"
+          "branch": "develop",
+          "revision": "3df04740f203459edd075b53a1af80d2a0799d44",
+          "version": null
         }
       },
       {

@@ -3,6 +3,7 @@ import System
 
 import XibLoc
 import SystemPackage
+import XcodeTools
 
 
 
@@ -60,7 +61,7 @@ struct UnbuiltFramework {
 	
 	var skipExistingArtifacts: Bool
 	
-	func buildFramework(at destPath: FilePath) throws {
+	func buildFramework(at destPath: FilePath) async throws {
 		guard !skipExistingArtifacts || !Config.fm.fileExists(atPath: destPath.string) else {
 			Config.logger.info("Skipping creation of \(destPath) because it already exists")
 			return
@@ -115,11 +116,8 @@ struct UnbuiltFramework {
 		try Config.fm.copyItem(at: libPath.url, to: installedLibPath.url)
 		/* Renaming the lib */
 		Config.logger.info("Updating install name of dylib at \(installedLibPath)")
-		try Process.spawnAndStreamEnsuringSuccess(
-			"/usr/bin/xcrun",
-			args: ["install_name_tool", "-id", "@rpath/\(frameworkPathComponent.string)/\(binaryPathComponent.string)", installedLibPath.string],
-			outputHandler: Process.logProcessOutputFactory()
-		)
+		try await ProcessInvocation("/usr/bin/xcrun", "install_name_tool", "-id", "@rpath/\(frameworkPathComponent.string)/\(binaryPathComponent.string)", installedLibPath.string)
+			.invokeAndStreamOutput{ line, _, _ in Config.logger.info("install_name_tool: fd=\(line.fd): \(line.strLineOrHex())") }
 		
 		/* Create the Info.plist */
 		try Config.fm.ensureDirectory(path: infoplistPath.removingLastComponent())

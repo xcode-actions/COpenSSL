@@ -1,5 +1,7 @@
 import Foundation
 
+import XcodeTools
+
 
 
 struct UnbuiltDynamicXCFramework {
@@ -8,7 +10,7 @@ struct UnbuiltDynamicXCFramework {
 	
 	var skipExistingArtifacts: Bool
 	
-	func buildXCFramework(at destPath: FilePath) throws {
+	func buildXCFramework(at destPath: FilePath) async throws {
 		guard frameworks.count > 0 else {
 			Config.logger.warning("Asked to create an XCFramework at path \(destPath), but no frameworks given.")
 			return
@@ -20,11 +22,8 @@ struct UnbuiltDynamicXCFramework {
 		try Config.fm.ensureDirectory(path: destPath.removingLastComponent())
 		try Config.fm.ensureDirectoryDeleted(path: destPath)
 		
-		try Process.spawnAndStreamEnsuringSuccess(
-			"/usr/bin/xcrun",
-			args: ["xcodebuild", "-create-xcframework"] + frameworks.flatMap{ ["-framework", $0.string] } + ["-output", destPath.string],
-			outputHandler: Process.logProcessOutputFactory()
-		)
+		try await ProcessInvocation("xcodebuild", args: ["-create-xcframework"] + frameworks.flatMap{ ["-framework", $0.string] } + ["-output", destPath.string])
+			.invokeAndStreamOutput{ line, _, _ in Config.logger.info("xcodebuild: fd=\(line.fd): \(line.strLineOrHex())") }
 	}
 	
 }

@@ -2,6 +2,7 @@ import Foundation
 import System
 
 import Logging
+import XcodeTools
 
 
 
@@ -81,9 +82,10 @@ struct BuildPaths {
 	 the static xcframework will be built. */
 	let finalStaticLibsAndHeadersDir: FilePath
 	
-	init(filesPath: FilePath, workdir: FilePath, resultdir: FilePath?, productName: String) throws {
-		self.developerDir = try FilePath(
-			Process.spawnAndGetOutput("/usr/bin/xcode-select", args: ["-print-path"]).trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+	init(filesPath: FilePath, workdir: FilePath, resultdir: FilePath?, productName: String) async throws {
+		struct NotExactlyOneLineFromXcodeSelect : Error {}
+		self.developerDir = try await FilePath(
+			ProcessInvocation("/usr/bin/xcode-select", "-print-path").invokeAndGetStdout().onlyElement.get(orThrow: NotExactlyOneLineFromXcodeSelect())
 		)
 		
 		self.opensslConfigsDir = filesPath.appending("OpenSSLConfigs")

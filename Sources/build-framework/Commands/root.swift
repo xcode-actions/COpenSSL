@@ -117,7 +117,7 @@ struct BuildFramework : ParsableCommand {
 		LoggingSystem.bootstrap{ _ in CLTLogger() }
 		XcodeTools.XcodeToolsConfig.logger?.logLevel = .warning
 		
-		let buildPaths = try BuildPaths(filesPath: FilePath(filesPath), workdir: FilePath(workdir), resultdir: resultdir.flatMap{ FilePath($0) }, productName: "COpenSSL")
+		let buildPaths = try await BuildPaths(filesPath: FilePath(filesPath), workdir: FilePath(workdir), resultdir: resultdir.flatMap{ FilePath($0) }, productName: "COpenSSL")
 		
 		if clean {
 			Config.logger.info("Cleaning previous builds if applicable")
@@ -146,13 +146,13 @@ struct BuildFramework : ParsableCommand {
 					(sdkVersion, minSDKVersion) = (nil, nil)
 			}
 			let unbuiltTarget = UnbuiltTarget(target: target, tarball: tarball, buildPaths: buildPaths, sdkVersion: sdkVersion, minSDKVersion: minSDKVersion, opensslVersion: opensslVersion, disableBitcode: disableBitcode, skipExistingArtifacts: skipExistingArtifacts)
-			let builtTarget = try unbuiltTarget.buildTarget()
+			let builtTarget = try await unbuiltTarget.buildTarget()
 			
 			assert(builtTargets[target] == nil)
 			builtTargets[target] = builtTarget
 			
 			assert(dylibs[target] == nil)
-			dylibs[target] = try builtTarget.buildDylibFromStaticLibs(opensslVersion: opensslVersion, buildPaths: buildPaths, skipExistingArtifacts: skipExistingArtifacts)
+			dylibs[target] = try await builtTarget.buildDylibFromStaticLibs(opensslVersion: opensslVersion, buildPaths: buildPaths, skipExistingArtifacts: skipExistingArtifacts)
 		}
 		
 		let targetsByPlatformAndSdks = Dictionary(grouping: targets, by: { PlatformAndSdk(platform: $0.platform, sdk: $0.sdk) })
@@ -252,7 +252,7 @@ struct BuildFramework : ParsableCommand {
 			for lib in builtTarget.staticLibraries {
 				let unbuiltFATLib = UnbuiltFATLib(libs: targets.map{ buildPaths.installDir(for: $0).pushing(lib) }, skipExistingArtifacts: skipExistingArtifacts)
 				let dest = buildPaths.fatStaticDir.appending(platformAndSdk.pathComponent).pushing(lib)
-				try unbuiltFATLib.buildFATLib(at: dest)
+				try await unbuiltFATLib.buildFATLib(at: dest)
 				fatStaticLibs.append(dest)
 			}
 			
@@ -261,7 +261,7 @@ struct BuildFramework : ParsableCommand {
 			do {
 				let unbuiltMergedStaticLib = UnbuiltMergedStaticLib(libs: fatStaticLibs, skipExistingArtifacts: skipExistingArtifacts)
 				fatStaticLib = buildPaths.mergedFatStaticLibsDir.appending(platformAndSdk.pathComponent).appending(buildPaths.staticLibProductNameComponent)
-				try unbuiltMergedStaticLib.buildMergedLib(at: fatStaticLib)
+				try await unbuiltMergedStaticLib.buildMergedLib(at: fatStaticLib)
 			}
 			
 			/* Install the module.modulemap file for the static lib */
@@ -304,7 +304,7 @@ struct BuildFramework : ParsableCommand {
 			do {
 				let unbuiltFATLib = UnbuiltFATLib(libs: targets.map{ buildPaths.dylibsDir(for: $0).appending(buildPaths.dylibProductNameComponent) }, skipExistingArtifacts: skipExistingArtifacts)
 				fatDynamicLib = buildPaths.mergedFatDynamicLibsDir.appending(platformAndSdk.pathComponent).appending(buildPaths.dylibProductNameComponent)
-				try unbuiltFATLib.buildFATLib(at: fatDynamicLib)
+				try await unbuiltFATLib.buildFATLib(at: fatDynamicLib)
 			}
 			
 			/* Create the framework from the dylib, headers, and other templates. */
@@ -321,7 +321,7 @@ struct BuildFramework : ParsableCommand {
 				 * instead of the maximum min sdk (more conservative option) as the
 				 * lib should work on iOS < 14.0, even for such cases (the arm64
 				 * slice would be used even on arm64e-capable processor, I think). */
-				let minimumOSVersion = try BuiltTarget.getSdkVersions([fatDynamicLib], multipleSdkVersionsResolution: .returnMin).minSdk
+				let minimumOSVersion = try await BuiltTarget.getSdkVersions([fatDynamicLib], multipleSdkVersionsResolution: .returnMin).minSdk
 				let unbuiltFramework = UnbuiltFramework(
 					version: frameworkVersion,
 					info: .init(
@@ -343,7 +343,7 @@ struct BuildFramework : ParsableCommand {
 					skipExistingArtifacts: skipExistingArtifacts
 				)
 				frameworkPath = buildPaths.finalFrameworksDir.appending(platformAndSdk.pathComponent).appending(buildPaths.frameworkProductNameComponent)
-				try unbuiltFramework.buildFramework(at: frameworkPath)
+				try await unbuiltFramework.buildFramework(at: frameworkPath)
 			}
 			frameworks.append(frameworkPath)
 		}
@@ -351,19 +351,19 @@ struct BuildFramework : ParsableCommand {
 		/* Build the static XCFramework */
 		do {
 			let unbuiltXCFramework = UnbuiltStaticXCFramework(librariesAndHeadersDir: librariesAndHeadersDir, skipExistingArtifacts: skipExistingArtifacts)
-			try unbuiltXCFramework.buildXCFramework(at: buildPaths.resultXCFrameworkStatic)
+			try await unbuiltXCFramework.buildXCFramework(at: buildPaths.resultXCFrameworkStatic)
 		}
 		
 		/* Build the dynamic XCFramework */
 		do {
 			let unbuiltXCFramework = UnbuiltDynamicXCFramework(frameworks: frameworks, skipExistingArtifacts: skipExistingArtifacts)
-			try unbuiltXCFramework.buildXCFramework(at: buildPaths.resultXCFrameworkDynamic)
+			try await unbuiltXCFramework.buildXCFramework(at: buildPaths.resultXCFrameworkDynamic)
 		}
 		
 		/* Create the final XCFramework package (XCFramework archives and Package.swift file) */
 		do {
 			let unbuiltXCFrameworkPackage = UnbuiltXCFrameworkPackage(buildPaths: buildPaths, skipExistingArtifacts: skipExistingArtifacts)
-			try unbuiltXCFrameworkPackage.buildXCFrameworkPackage(opensslVersion: opensslVersion)
+			try await unbuiltXCFrameworkPackage.buildXCFrameworkPackage(opensslVersion: opensslVersion)
 		}
 	}
 	

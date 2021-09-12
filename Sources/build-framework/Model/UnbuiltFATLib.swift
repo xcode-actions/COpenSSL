@@ -1,5 +1,7 @@
 import Foundation
 
+import XcodeTools
+
 
 
 struct UnbuiltFATLib {
@@ -7,7 +9,7 @@ struct UnbuiltFATLib {
 	var libs: [FilePath]
 	var skipExistingArtifacts: Bool
 	
-	func buildFATLib(at destPath: FilePath) throws {
+	func buildFATLib(at destPath: FilePath) async throws {
 		guard libs.count > 0 else {
 			Config.logger.warning("Asked to create a FAT lib at path \(destPath), but no libs given.")
 			return
@@ -20,11 +22,8 @@ struct UnbuiltFATLib {
 		try Config.fm.ensureFileDeleted(path: destPath)
 		
 		Config.logger.info("Creating FAT lib \(destPath) from \(libs.count) lib(s)")
-		try Process.spawnAndStreamEnsuringSuccess(
-			"/usr/bin/xcrun",
-			args: ["lipo", "-create"] + libs.map{ $0.string } + ["-output", destPath.string],
-			outputHandler: Process.logProcessOutputFactory()
-		)
+		try await ProcessInvocation("lipo", args: ["-create"] + libs.map{ $0.string } + ["-output", destPath.string])
+			.invokeAndStreamOutput{ line, _, _ in Config.logger.info("lipo: fd=\(line.fd): \(line.strLineOrHex())") }
 	}
 	
 }

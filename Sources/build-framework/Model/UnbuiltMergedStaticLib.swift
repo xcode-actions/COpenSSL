@@ -1,5 +1,7 @@
 import Foundation
 
+import XcodeTools
+
 
 
 struct UnbuiltMergedStaticLib {
@@ -7,7 +9,7 @@ struct UnbuiltMergedStaticLib {
 	var libs: [FilePath]
 	var skipExistingArtifacts: Bool
 	
-	func buildMergedLib(at destPath: FilePath) throws {
+	func buildMergedLib(at destPath: FilePath) async throws {
 		guard libs.count > 0 else {
 			Config.logger.warning("Asked to create a merged static lib at path \(destPath), but no libs given.")
 			return
@@ -20,11 +22,8 @@ struct UnbuiltMergedStaticLib {
 		try Config.fm.ensureFileDeleted(path: destPath)
 		
 		Config.logger.info("Merging \(libs.count) lib(s) to \(destPath)")
-		try Process.spawnAndStreamEnsuringSuccess(
-			"/usr/bin/xcrun",
-			args: ["libtool", "-static", "-o", destPath.string] + libs.map{ $0.string },
-			outputHandler: Process.logProcessOutputFactory()
-		)
+		try await ProcessInvocation("/usr/bin/xcrun", args: ["libtool", "-static", "-o", destPath.string] + libs.map{ $0.string })
+			.invokeAndStreamOutput{ line, _, _ in Config.logger.info("libtool: fd=\(line.fd): \(line.strLineOrHex())") }
 	}
 	
 }

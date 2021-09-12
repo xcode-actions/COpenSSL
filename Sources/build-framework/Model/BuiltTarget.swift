@@ -2,7 +2,9 @@ import Foundation
 import System
 
 import Logging
+import SignalHandling
 import SystemPackage
+import XcodeTools
 
 
 
@@ -33,12 +35,12 @@ struct BuiltTarget {
 	}
 	
 	/** Returns an absolute FilePath */
-	func buildDylibFromStaticLibs(opensslVersion: String, buildPaths: BuildPaths, skipExistingArtifacts: Bool) throws -> FilePath {
-		try buildLibObjects(buildPaths: buildPaths, skipExistingArtifacts: skipExistingArtifacts)
-		return try buildDylib(opensslVersion: opensslVersion, buildPaths: buildPaths, skipExistingArtifacts: skipExistingArtifacts)
+	func buildDylibFromStaticLibs(opensslVersion: String, buildPaths: BuildPaths, skipExistingArtifacts: Bool) async throws -> FilePath {
+		try await buildLibObjects(buildPaths: buildPaths, skipExistingArtifacts: skipExistingArtifacts)
+		return try await buildDylib(opensslVersion: opensslVersion, buildPaths: buildPaths, skipExistingArtifacts: skipExistingArtifacts)
 	}
 	
-	private func buildLibObjects(buildPaths: BuildPaths, skipExistingArtifacts: Bool) throws {
+	private func buildLibObjects(buildPaths: BuildPaths, skipExistingArtifacts: Bool) async throws {
 		/* Let’s extract the static libraries’ objects in a folder. We’ll use this
 		 * to build the dynamic libraries. */
 		let destinationDir = buildPaths.libObjectsDir(for: target)
@@ -57,15 +59,12 @@ struct BuiltTarget {
 		
 		for staticLibPath in absoluteStaticLibrariesPaths {
 			Config.logger.info("Extracting \(staticLibPath) to \(destinationDir)")
-			try Process.spawnAndStreamEnsuringSuccess(
-				"/usr/bin/xcrun",
-				args: ["ar", "-x", staticLibPath.string],
-				outputHandler: Process.logProcessOutputFactory()
-			)
+			try await ProcessInvocation("ar", "-x", staticLibPath.string)
+				.invokeAndStreamOutput{ line, _, _ in Config.logger.info("ar: fd=\(line.fd): \(line.strLineOrHex())") }
 		}
 	}
 	
-	private func buildDylib(opensslVersion: String, buildPaths: BuildPaths, skipExistingArtifacts: Bool) throws -> FilePath {
+	private func buildDylib(opensslVersion: String, buildPaths: BuildPaths, skipExistingArtifacts: Bool) async throws -> FilePath {
 		/* Now we build the dynamic libraries. We’ll use those to get FAT dynamic
 		 * libraries later. */
 		let destination = buildPaths.dylibsDir(for: target).appending(buildPaths.dylibProductNameComponent)
@@ -76,27 +75,23 @@ struct BuiltTarget {
 		try Config.fm.ensureDirectoryDeleted(path: destination.removingLastComponent())
 		try Config.fm.ensureDirectory(path: destination.removingLastComponent())
 		
-		let hasBitcode = try Self.checkForBitcode(absoluteStaticLibrariesPaths)
-		let (sdk, minSdk) = try Self.getSdkVersions(absoluteStaticLibrariesPaths)
+		let hasBitcode = try await Self.checkForBitcode(absoluteStaticLibrariesPaths)
+		let (sdk, minSdk) = try await Self.getSdkVersions(absoluteStaticLibrariesPaths)
 		Config.logger.debug("got sdk \(sdk), min sdk \(minSdk)", metadata: ["target": "\(target)"])
 		
 		let objectDir = buildPaths.libObjectsDir(for: target)
 		let objectFiles = try Config.fm.contentsOfDirectory(atPath: objectDir.string).filter{ $0.hasSuffix(".o") }.map{ objectDir.appending($0) }
 		Config.logger.info("Creating dylib at \(destination) from objects in \(objectDir)")
-		try Process.spawnAndStreamEnsuringSuccess(
-			"/usr/bin/xcrun",
-			args: ["ld"] + objectFiles.map{ $0.string } + (hasBitcode ? ["-bitcode_bundle"] : []) + [
-				"-dylib", "-lSystem",
-				"-application_extension",
-				"-arch", target.arch,
-				"-platform_version", target.platformVersionName, minSdk, sdk,
-				"-syslibroot", "\(buildPaths.developerDir)/Platforms/\(target.platformLegacyName).platform/Developer/SDKs/\(target.platformLegacyName).sdk",
-				"-compatibility_version", Self.normalizedOpenSSLVersion(opensslVersion), /* Not true, but we do not care; the resulting lib will be in a framework which will be embedded in the app and not reused 99.99% of the time, so… */
-				"-current_version", Self.normalizedOpenSSLVersion(opensslVersion),
-				"-o", destination.string
-			],
-			outputHandler: Process.logProcessOutputFactory()
-		)
+		try await ProcessInvocation("ld", args: objectFiles.map{ $0.string } + (hasBitcode ? ["-bitcode_bundle"] : []) + [
+			"-dylib", "-lSystem",
+			"-application_extension",
+			"-arch", target.arch,
+			"-platform_version", target.platformVersionName, minSdk, sdk,
+			"-syslibroot", "\(buildPaths.developerDir)/Platforms/\(target.platformLegacyName).platform/Developer/SDKs/\(target.platformLegacyName).sdk",
+			"-compatibility_version", Self.normalizedOpenSSLVersion(opensslVersion), /* Not true, but we do not care; the resulting lib will be in a framework which will be embedded in the app and not reused 99.99% of the time, so… */
+			"-current_version", Self.normalizedOpenSSLVersion(opensslVersion),
+			"-o", destination.string
+		]).invokeAndStreamOutput{ line, _, _ in Config.logger.info("ld: fd=\(line.fd): \(line.strLineOrHex())") }
 		return destination
 	}
 	
@@ -141,57 +136,60 @@ extension BuiltTarget {
 	   version 4.0   <-- minimum SDK
 	       sdk 6.1   <-- target SDK
 	 ``` */
-	static func getSdkVersions(_ libs: [FilePath], multipleSdkVersionsResolution: MultipleSdkVersionsResolution = .error) throws -> (sdk: String, minSdk: String) {
+	static func getSdkVersions(_ libs: [FilePath], multipleSdkVersionsResolution: MultipleSdkVersionsResolution = .error) async throws -> (sdk: String, minSdk: String) {
 		var sdks = Set<String>()
 		var minSdks = Set<String>()
 		for lib in libs {
 			var error: Error?
 			var lastCommand: String?
-			let outputHandler: (String, SystemPackage.FileDescriptor) -> Void = { line, fd in
-				guard error == nil else {return}
-				
-				let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
-				let lastWord = String(trimmedLine.split(separator: " ").last ?? "")
-				switch fd {
-					case .standardOutput:
-						switch trimmedLine {
-							case let str where str.hasPrefix("Load command "): lastCommand = nil
-							case let str where str.hasPrefix("cmd "):          lastCommand = lastWord
-							case let str where (
-								(str.hasPrefix("minos ")   && lastCommand == "LC_BUILD_VERSION") ||
-								(str.hasPrefix("version ") && (lastCommand ?? "").hasPrefix("LC_VERSION_MIN_"))
-							):
-								minSdks.insert(lastWord)
-								guard multipleSdkVersionsResolution != .error || minSdks.count == 1 else {
-									Config.logger.error("found multiple min sdks; expected only one: \(minSdks)")
-									struct MultipleMinSdkVersionFound : Error {var libs: [FilePath]}
-									error = MultipleMinSdkVersionFound(libs: libs)
-									return
-								}
-							case let str where (
-								str.hasPrefix("sdk ") && (lastCommand == "LC_BUILD_VERSION" || (lastCommand ?? "").hasPrefix("LC_VERSION_MIN_"))
-							):
-								guard lastWord != "n/a" else {return}
-								sdks.insert(lastWord)
-								guard multipleSdkVersionsResolution != .error || sdks.count == 1 else {
-									Config.logger.error("found multiple sdks; expected only one: \(sdks)")
-									struct MultipleSdkVersionFound : Error {var libs: [FilePath]}
-									error = MultipleSdkVersionFound(libs: libs)
-									return
-								}
-								
-							default: (/*nop: we simply ignore the line*/)
-						}
-						
-					case .standardError: Config.logger.debug("otool trimmed stderr: \(trimmedLine)")
-					default:             Config.logger.debug("otool trimmed unknown fd: \(trimmedLine)")
+			try await ProcessInvocation("otool", "-l", lib.string, expectedTerminations: [(0, .exit), (Signal.brokenPipe.rawValue, .uncaughtSignal)])
+				.invokeAndStreamOutput{ lineAndFd, signalEndOfInterestForStream, _ in
+					guard error == nil else {return}
+					guard let line = try? lineAndFd.strLine() else {
+						struct NonUtf8LineFromOTool : Error {var line: Data}
+						error = NonUtf8LineFromOTool(line: lineAndFd.line)
+						signalEndOfInterestForStream()
+						return
+					}
+					
+					let lastWord = String(line.split(separator: " ").last ?? "")
+					switch lineAndFd.fd {
+						case .standardOutput:
+							switch line {
+								case let str where str.hasPrefix("Load command "): lastCommand = nil
+								case let str where str.hasPrefix("cmd "):          lastCommand = lastWord
+								case let str where (
+									(str.hasPrefix("minos ")   && lastCommand == "LC_BUILD_VERSION") ||
+									(str.hasPrefix("version ") && (lastCommand ?? "").hasPrefix("LC_VERSION_MIN_"))
+								):
+									minSdks.insert(lastWord)
+									guard multipleSdkVersionsResolution != .error || minSdks.count == 1 else {
+										Config.logger.error("found multiple min sdks; expected only one: \(minSdks)")
+										struct MultipleMinSdkVersionFound : Error {var libs: [FilePath]}
+										error = MultipleMinSdkVersionFound(libs: libs)
+										signalEndOfInterestForStream()
+										return
+									}
+								case let str where (
+									str.hasPrefix("sdk ") && (lastCommand == "LC_BUILD_VERSION" || (lastCommand ?? "").hasPrefix("LC_VERSION_MIN_"))
+								):
+									guard lastWord != "n/a" else {return}
+									sdks.insert(lastWord)
+									guard multipleSdkVersionsResolution != .error || sdks.count == 1 else {
+										Config.logger.error("found multiple sdks; expected only one: \(sdks)")
+										struct MultipleSdkVersionFound : Error {var libs: [FilePath]}
+										error = MultipleSdkVersionFound(libs: libs)
+										signalEndOfInterestForStream()
+										return
+									}
+									
+								default: (/*nop: we simply ignore the line*/)
+							}
+							
+						case .standardError: Config.logger.debug("otool stderr: \(line)")
+						default:             Config.logger.debug("otool unknown fd: \(line)")
+					}
 				}
-			}
-			try Process.spawnAndStreamEnsuringSuccess(
-				"/usr/bin/xcrun",
-				args: ["otool", "-l", lib.string],
-				outputHandler: outputHandler
-			)
 			if let e = error {throw e}
 		}
 		guard !sdks.isEmpty && !minSdks.isEmpty else {
@@ -231,30 +229,29 @@ extension BuiltTarget {
 	 
 	 which is apparently [the Apple-recommended method](https://forums.developer.apple.com/message/7038)
 	 (link is dead, it’s from [this stackoverflow comment](https://stackoverflow.com/questions/32808642#comment64079201_33615568)). */
-	static func checkForBitcode(_ libs: [FilePath]) throws -> Bool {
+	static func checkForBitcode(_ libs: [FilePath]) async throws -> Bool {
 		var foundLLVM = false
 		var foundBitcode = false
 		for lib in libs {
 			var localFoundLLVM = false
-			let outputHandler: (String, SystemPackage.FileDescriptor) -> Void = { line, fd in
-				guard !foundBitcode else {return}
-				
-				let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
-				switch fd {
-					case .standardOutput:
-						localFoundLLVM = localFoundLLVM || trimmedLine.contains("__LLVM")
-						foundBitcode   = foundBitcode   || trimmedLine.contains("__bitcode")
-						foundLLVM      = foundLLVM      || localFoundLLVM
-						
-					case .standardError: Config.logger.debug("otool trimmed stderr: \(trimmedLine)")
-					default:             Config.logger.debug("otool trimmed unknown fd: \(trimmedLine)")
+			try await ProcessInvocation("otool", "-l", lib.string, expectedTerminations: [(0, .exit), (Signal.brokenPipe.rawValue, .uncaughtSignal)])
+				.invokeAndStreamOutput{ lineAndFd, signalEndOfInterestForStream, _ in
+					guard !foundBitcode else {return}
+					
+					let line = lineAndFd.line
+					switch lineAndFd.fd {
+						case .standardOutput:
+							localFoundLLVM = localFoundLLVM || line.range(of: Data("__LLVM".utf8))    != nil
+							foundBitcode   = foundBitcode   || line.range(of: Data("__bitcode".utf8)) != nil
+							foundLLVM      = foundLLVM      || localFoundLLVM
+							if foundBitcode {
+								signalEndOfInterestForStream()
+							}
+							
+						case .standardError: Config.logger.debug("otool stderr: \(lineAndFd.strLineOrHex())")
+						default:             Config.logger.debug("otool unknown fd: \(lineAndFd.strLineOrHex())")
+					}
 				}
-			}
-			try Process.spawnAndStreamEnsuringSuccess(
-				"/usr/bin/xcrun",
-				args: ["otool", "-l", lib.string],
-				outputHandler: outputHandler
-			)
 			if localFoundLLVM && !foundBitcode {
 				Config.logger.warning("__LLVM found in \(lib.string), but __bitcode was not (if lib is dynamic this is expected)")
 			}
