@@ -142,20 +142,20 @@ extension BuiltTarget {
 		for lib in libs {
 			var error: Error?
 			var lastCommand: String?
-			try await ProcessInvocation("otool", "-l", lib.string, expectedTerminations: [(0, .exit), (Signal.brokenPipe.rawValue, .uncaughtSignal)])
+			try await ProcessInvocation("otool", "-l", lib.string, expectedTerminations: [(0, .exit), (1, .exit) /* otool exits w/ code 1 on broken pipe… */])
 				.invokeAndStreamOutput{ lineAndFd, signalEndOfInterestForStream, _ in
 					guard error == nil else {return}
-					guard let line = try? lineAndFd.strLine() else {
+					guard let trimmedLine = try? lineAndFd.strLine().trimmingCharacters(in: .whitespaces) else {
 						struct NonUtf8LineFromOTool : Error {var line: Data}
 						error = NonUtf8LineFromOTool(line: lineAndFd.line)
 						signalEndOfInterestForStream()
 						return
 					}
 					
-					let lastWord = String(line.split(separator: " ").last ?? "")
+					let lastWord = String(trimmedLine.split(separator: " ").last ?? "")
 					switch lineAndFd.fd {
 						case .standardOutput:
-							switch line {
+							switch trimmedLine {
 								case let str where str.hasPrefix("Load command "): lastCommand = nil
 								case let str where str.hasPrefix("cmd "):          lastCommand = lastWord
 								case let str where (
@@ -186,8 +186,8 @@ extension BuiltTarget {
 								default: (/*nop: we simply ignore the line*/)
 							}
 							
-						case .standardError: Config.logger.debug("otool stderr: \(line)")
-						default:             Config.logger.debug("otool unknown fd: \(line)")
+						case .standardError: Config.logger.debug("otool stderr: \(trimmedLine)")
+						default:             Config.logger.debug("otool unknown fd: \(trimmedLine)")
 					}
 				}
 			if let e = error {throw e}
@@ -234,7 +234,7 @@ extension BuiltTarget {
 		var foundBitcode = false
 		for lib in libs {
 			var localFoundLLVM = false
-			try await ProcessInvocation("otool", "-l", lib.string, expectedTerminations: [(0, .exit), (Signal.brokenPipe.rawValue, .uncaughtSignal)])
+			try await ProcessInvocation("otool", "-l", lib.string, expectedTerminations: [(0, .exit), (1, .exit) /* otool exits w/ code 1 on broken pipe… */])
 				.invokeAndStreamOutput{ lineAndFd, signalEndOfInterestForStream, _ in
 					guard !foundBitcode else {return}
 					
