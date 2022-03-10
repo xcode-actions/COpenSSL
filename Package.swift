@@ -15,7 +15,7 @@ let package = Package(
 		.package(url: "https://github.com/happn-app/XibLoc.git", from: "1.1.1"),
 		.package(url: "https://github.com/xcode-actions/clt-logger.git", from: "0.3.6"),
 		.package(url: "https://github.com/xcode-actions/swift-signal-handling.git", from: "1.0.0"),
-		.package(url: "https://github.com/xcode-actions/XcodeTools.git", .branch("develop"))
+		.package(url: "https://github.com/xcode-actions/XcodeTools.git", branch: "develop")
 	],
 	targets: [
 		.executableTarget(name: "build-framework", dependencies: [
