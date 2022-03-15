@@ -91,8 +91,8 @@ struct BuildPaths {
 		self.opensslConfigsDir = filesPath.appending("OpenSSLConfigs")
 		self.templatesDir = filesPath.appending("Templates")
 		
-		self.workDir = workdir
-		self.resultDir = resultdir ?? workdir
+		self.workDir = System.FilePath(FileManager.default.currentDirectoryPath).pushing(workdir)
+		self.resultDir = System.FilePath(FileManager.default.currentDirectoryPath).pushing(resultdir ?? workdir)
 		self.buildDir = self.workDir.appending("build")
 		
 		/* Actual (full) validation would be a bit more complex than that */
