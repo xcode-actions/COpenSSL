@@ -69,7 +69,7 @@
         "repositoryURL": "https://github.com/apple/swift-llbuild.git",
         "state": {
           "branch": "main",
-          "revision": "d619a5036c005d561bdc58741412200df6f32798",
+          "revision": "171fb6e7b563dd78a9f360f517258e84c36beaf7",
           "version": null
         }
       },
@@ -122,8 +122,8 @@
         "package": "XcodeTools",
         "repositoryURL": "https://github.com/xcode-actions/XcodeTools.git",
         "state": {
-          "branch": "develop",
-          "revision": "86e9088c7b5e5be0e9418a6602ce6eee9dccb2bf",
+          "branch": "develop+spmcompat",
+          "revision": "a4121b98fa759add73b3f5acbf21dd745cec7f2b",
           "version": null
         }
       },
