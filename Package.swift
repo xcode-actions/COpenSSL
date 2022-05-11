@@ -15,7 +15,7 @@ let package = Package(
 		.library(name: "COpenSSL-dynamic", targets: ["COpenSSL-dynamic"])
 	],
 	targets: [
-		.binaryTarget(name: "COpenSSL-static", url: "https://github.com/xcode-actions/COpenSSL/releases/download/1.1.114/COpenSSL-static.xcframework.zip", checksum: "20d5b0c3ca31a9bad325208e42ee8aeac729f1ba5d4067ec07bb92beff5761f6"),
-		.binaryTarget(name: "COpenSSL-dynamic", url: "https://github.com/xcode-actions/COpenSSL/releases/download/1.1.114/COpenSSL-dynamic.xcframework.zip", checksum: "1ff09aaa3225e3aec3efe541a874c8b1907d828f6ed65257c905a404bfc655b5")
+		.binaryTarget(name: "COpenSSL-static", url: "https://github.com/xcode-actions/COpenSSL/releases/download/1.1.115/COpenSSL-static.xcframework.zip", checksum: "8d09886b37329154302a0f6887644201d307b627badd78d4d6fdfdcac39e06dd"),
+		.binaryTarget(name: "COpenSSL-dynamic", url: "https://github.com/xcode-actions/COpenSSL/releases/download/1.1.115/COpenSSL-dynamic.xcframework.zip", checksum: "3a6ea19ad5db2c554f24874e89bdac086cf7f907a73519adb8bb8addf50f2a34")
 	]
 )
